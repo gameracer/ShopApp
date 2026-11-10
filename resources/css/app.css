@@ -1,0 +1,82 @@
+@import 'tailwindcss';
+
+@source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
+@source '../../storage/framework/views/*.php';
+@source '../views';
+@source '../js';
+
+@theme {
+    --font-sans: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
+
+[x-cloak] {
+    display: none !important;
+}
+
+@utility btn {
+    @apply inline-flex items-center justify-center gap-1.5 rounded-lg px-3.5 py-2 text-sm font-medium shadow-sm transition focus:ring-2 focus:ring-offset-1 focus:outline-none disabled:cursor-not-allowed disabled:opacity-50;
+}
+
+@layer components {
+    .card {
+        @apply rounded-xl border border-slate-200 bg-white shadow-sm;
+    }
+    .card-header {
+        @apply flex items-center justify-between gap-2 border-b border-slate-100 px-4 py-3;
+    }
+    .card-title {
+        @apply text-sm font-semibold text-slate-700;
+    }
+    .label {
+        @apply mb-1 block text-sm font-medium text-slate-700;
+    }
+    .input {
+        @apply block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm placeholder:text-slate-400 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/30 focus:outline-none;
+    }
+    .btn-primary {
+        @apply btn bg-emerald-600 text-white hover:bg-emerald-700 focus:ring-emerald-500;
+    }
+    .btn-secondary {
+        @apply btn border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 focus:ring-slate-400;
+    }
+    .btn-danger {
+        @apply btn bg-rose-600 text-white hover:bg-rose-700 focus:ring-rose-500;
+    }
+    .btn-sm {
+        @apply px-2.5 py-1 text-xs;
+    }
+    .table {
+        @apply min-w-full divide-y divide-slate-200 text-sm;
+    }
+    .table th {
+        @apply bg-slate-50 px-3 py-2 text-left text-xs font-semibold tracking-wide text-slate-500 uppercase;
+    }
+    .table td {
+        @apply px-3 py-2 align-middle text-slate-700;
+    }
+    .table tbody tr {
+        @apply hover:bg-slate-50;
+    }
+    .error {
+        @apply mt-1 text-xs text-rose-600;
+    }
+    .nav-link {
+        @apply flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-slate-300 hover:bg-slate-800 hover:text-white;
+    }
+    .nav-link.active {
+        @apply bg-emerald-600 text-white;
+    }
+}
+
+@media print {
+    .no-print {
+        display: none !important;
+    }
+    body {
+        background: white !important;
+    }
+    .card {
+        box-shadow: none !important;
+        border-color: #ddd !important;
+    }
+}
