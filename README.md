@@ -70,7 +70,17 @@ To use MySQL instead, set `DB_CONNECTION=mysql` and the `DB_*` values in `.env` 
 | Owner | `owner@shop.test` | `password` | English |
 | Seller | `seller@shop.test` | `password` | Kiswahili |
 
-When the app is not running in production, the seeder also adds sample products, tags, customers, three weeks of sales, credit sales and expenses. **Change both passwords before real use.** You can do that in *My profile*.
+These accounts, plus sample products, tags, customers, three weeks of sales, credit sales and expenses, are only created when the app is **not** running in production.
+
+### First-run setup (production)
+
+In production (`APP_ENV=production`, the Docker image and the desktop app) no accounts are created. The first visit opens **/setup**, where you choose:
+
+- the **shop name** (optional; defaults to "My Shop"),
+- the **owner** account (name, email, password, language),
+- optionally a **seller** account.
+
+The setup page closes for good once the first user exists. More users can be added later under *Users*.
 
 ## Development
 

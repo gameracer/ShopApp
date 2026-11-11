@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\AlertController;
 use App\Http\Controllers\Auth\LoginController;
+use App\Http\Controllers\Auth\SetupController;
 use App\Http\Controllers\CreditController;
 use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\DashboardController;
@@ -22,6 +23,10 @@ Route::get('/locale/{locale}', LocaleController::class)->name('locale.switch');
 Route::middleware('guest')->group(function () {
     Route::get('/login', [LoginController::class, 'show'])->name('login');
     Route::post('/login', [LoginController::class, 'login'])->middleware('throttle:10,1');
+
+    // First-run setup (only available while no users exist).
+    Route::get('/setup', [SetupController::class, 'show'])->name('setup');
+    Route::post('/setup', [SetupController::class, 'store'])->name('setup.store')->middleware('throttle:10,1');
 });
 
 Route::middleware('auth')->group(function () {

@@ -11,6 +11,10 @@ class LoginController extends Controller
 {
     public function show()
     {
+        if (SetupController::needed()) {
+            return redirect()->route('setup');
+        }
+
         return view('auth.login');
     }
 

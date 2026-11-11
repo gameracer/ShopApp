@@ -271,5 +271,15 @@
     "e.g. LUKU tokens for November": "mf. LUKU ya mwezi Novemba",
     "of": "kati ya",
     "results": "matokeo",
-    "to": "hadi"
+    "to": "hadi",
+    "Set up your shop": "Andaa duka lako",
+    "Create the accounts that will use this shop. You only do this once.": "Fungua akaunti zitakazotumia duka hili. Unafanya hivi mara moja tu.",
+    "Shop": "Duka",
+    "optional": "si lazima",
+    "Owner account": "Akaunti ya mmiliki",
+    "The owner can see buying prices and profit, and manage products, expenses, reports, users and settings.": "Mmiliki anaona bei za kununulia na faida, na anasimamia bidhaa, matumizi, ripoti, watumiaji na mipangilio.",
+    "Add a seller account": "Ongeza akaunti ya muuzaji",
+    "Sellers can sell, add stock and manage customers and credit. You can add more users later under Users.": "Wauzaji wanaweza kuuza, kuongeza stoo na kusimamia wateja na madeni. Unaweza kuongeza watumiaji wengine baadaye kwenye Watumiaji.",
+    "Finish setup": "Maliza maandalizi",
+    "Setup complete. Welcome!": "Maandalizi yamekamilika. Karibu!"
 }
