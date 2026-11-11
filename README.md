@@ -82,6 +82,27 @@ In production (`APP_ENV=production`, the Docker image and the desktop app) no ac
 
 The setup page closes for good once the first user exists. More users can be added later under *Users*.
 
+## Desktop app (Windows)
+
+`desktop/` packages ShopApp as a Windows app with [Electron](https://www.electronjs.org/). It bundles a portable PHP 8.4 and the Laravel app, runs fully offline on SQLite, and updates itself from GitHub Releases.
+
+- **Data** is kept in `%APPDATA%\ShopApp` (database, logs, backups), so reinstalling or updating never touches it.
+- **Backups**: one is taken automatically before every update, and *File → Back up data now / Restore a backup…* handles manual ones. The 30 most recent are kept in `%APPDATA%\ShopApp\backups`.
+- **Date check**: on every launch, the user confirms the computer's date and time. Answering *No* opens Windows date settings and closes ShopApp, because sales, expiry alerts and reports depend on the clock. There is an extra warning if the clock is earlier than the last launch.
+- **Updates**: when you publish releases to GitHub (see below), the app checks for updates on start and under *Help → Check for updates*, downloads them in the background and asks to restart.
+
+### Building and releasing
+
+Builds run locally on Windows (Node 22+ and git; the build downloads its own PHP and Composer):
+
+```bash
+npm install && cd desktop && npm install
+npm run dist                 # → desktop/dist/ShopApp-Setup-<version>.exe
+npm run release -- patch     # bump version, commit, tag vX.Y.Z, build
+```
+
+See **[desktop/BUILD.md](desktop/BUILD.md)** for the full procedure: setup, testing, versioning, publishing auto-updates, code signing and troubleshooting.
+
 ## Development
 
 ```bash

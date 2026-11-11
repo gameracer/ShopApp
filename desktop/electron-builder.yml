@@ -1,0 +1,42 @@
+appId: com.shopapp.desktop
+productName: ShopApp
+copyright: Copyright © ShopApp
+
+directories:
+  output: dist
+  # Put icon.ico (256x256) here to replace the default Electron icon.
+  buildResources: resources
+
+files:
+  - main.js
+  - splash.html
+  - package.json
+
+# The PHP runtime and the Laravel app live next to the asar, untouched.
+extraResources:
+  - from: build/php
+    to: php
+  - from: build/app
+    to: app
+
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+  artifactName: ShopApp-Setup-${version}.${ext}
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  # Shop data (database, backups) lives in %APPDATA%\ShopApp and is kept.
+  deleteAppDataOnUninstall: false
+
+# With GH_TOKEN set, `npm run release` uploads the installer + latest.yml here; the app checks for updates.
+# Builds always run locally.
+publish:
+  provider: github
+  owner: gameracer
+  repo: ShopApp
+  releaseType: release

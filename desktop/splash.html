@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'">
+    <title>ShopApp</title>
+    <style>
+        html, body { margin: 0; height: 100%; }
+        body {
+            display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
+            font-family: "Segoe UI", system-ui, sans-serif; color: #fff;
+            background: linear-gradient(135deg, #0f172a, #1e293b 55%, #064e3b);
+            -webkit-app-region: drag; user-select: none;
+        }
+        h1 { margin: 0; font-size: 22px; font-weight: 600; }
+        p { margin: 0; font-size: 13px; color: #cbd5e1; }
+        .spinner {
+            width: 28px; height: 28px; border-radius: 50%;
+            border: 3px solid rgba(255,255,255,.2); border-top-color: #10b981;
+            animation: spin .8s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+    <h1>ShopApp</h1>
+    <div class="spinner"></div>
+    <p>Starting… / Inaanza…</p>
+</body>
+</html>

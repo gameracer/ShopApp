@@ -19,3 +19,4 @@ database/*.sqlite
 tests
 Dockerfile
 .dockerignore
+desktop
