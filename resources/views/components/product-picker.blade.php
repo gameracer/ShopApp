@@ -37,7 +37,14 @@
                 </button>
             </li>
         </template>
-        <li x-show="!loading && results.length === 0" class="px-4 py-8 text-center text-sm text-slate-500">{{ __('No products found.') }}</li>
+        <li x-show="!loading && results.length === 0" class="space-y-2 px-4 py-8 text-center text-sm text-slate-500">
+            <p>{{ __('No products found.') }}</p>
+            @if (auth()->user()?->isOwner())
+                <a href="{{ route('products.create') }}" class="btn-secondary inline-flex"><x-icon name="plus" class="h-4 w-4" /> {{ __('New product') }}</a>
+            @else
+                <p class="text-xs">{{ __('Ask the shop owner to add products first.') }}</p>
+            @endif
+        </li>
         <li x-show="loading" class="px-4 py-3 text-center text-xs text-slate-400">{{ __('Searching…') }}</li>
     </ul>
 </div>
