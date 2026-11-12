@@ -9,6 +9,7 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ExpenseController;
 use App\Http\Controllers\LocaleController;
 use App\Http\Controllers\ProductController;
+use App\Http\Controllers\ProductImportController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\SaleController;
@@ -40,6 +41,11 @@ Route::middleware('auth')->group(function () {
 
     // Products: everyone can browse / search, only the owner manages them.
     Route::get('/products/search', [ProductController::class, 'search'])->name('products.search');
+    Route::middleware('role:owner')->group(function () {
+        Route::get('/products/import', [ProductImportController::class, 'create'])->name('products.import');
+        Route::post('/products/import', [ProductImportController::class, 'store'])->name('products.import.store')->middleware('throttle:10,1');
+        Route::get('/products/import/template', [ProductImportController::class, 'template'])->name('products.import.template');
+    });
     Route::resource('products', ProductController::class)->except(['index', 'show'])->middleware('role:owner');
     Route::resource('products', ProductController::class)->only(['index', 'show']);
 

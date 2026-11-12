@@ -45,6 +45,29 @@ class Product extends Model
     }
 
     /**
+     * Canonical form of a product name used to keep names unique:
+     * trimmed, inner whitespace collapsed and lower-cased.
+     */
+    public static function normalizeName(?string $name): string
+    {
+        return mb_strtolower(preg_replace('/\s+/u', ' ', trim((string) $name)));
+    }
+
+    /**
+     * Whether another product already uses this name (compared via normalizeName,
+     * so "Coca  Cola" and "coca cola" count as the same product).
+     */
+    public static function nameTaken(string $name, ?int $ignoreId = null): bool
+    {
+        $normalized = static::normalizeName($name);
+
+        return static::query()
+            ->when($ignoreId, fn (Builder $q) => $q->whereKeyNot($ignoreId))
+            ->pluck('name')
+            ->contains(fn ($existing) => static::normalizeName($existing) === $normalized);
+    }
+
+    /**
      * Search by name, SKU/barcode or tag name.
      */
     public function scopeSearch(Builder $query, ?string $term): Builder

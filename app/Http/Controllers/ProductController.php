@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Product;
 use App\Models\Tag;
+use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
@@ -127,7 +128,11 @@ class ProductController extends Controller
     private function validated(Request $request, ?Product $product = null): array
     {
         return $request->validate([
-            'name' => ['required', 'string', 'max:255'],
+            'name' => ['required', 'string', 'max:255', function (string $attribute, mixed $value, Closure $fail) use ($product) {
+                if (is_string($value) && Product::nameTaken($value, $product?->id)) {
+                    $fail(__('A product with this name already exists.'));
+                }
+            }],
             'sku' => ['nullable', 'string', 'max:100', Rule::unique('products', 'sku')->ignore($product)],
             'unit' => ['required', 'string', 'max:30'],
             'buying_price' => ['required', 'numeric', 'min:0'],
@@ -149,17 +154,10 @@ class ProductController extends Controller
     {
         $ids = array_map('intval', (array) $request->input('tags', []));
 
-        foreach (explode(',', (string) $request->input('new_tags')) as $name) {
-            $name = trim($name);
-            if ($name !== '') {
-                $ids[] = Tag::firstOrCreate(
-                    ['name' => mb_strtolower($name)],
-                    ['color' => Tag::COLORS[array_rand(Tag::COLORS)]]
-                )->id;
-            }
-        }
-
-        return array_values(array_unique($ids));
+        return array_values(array_unique([
+            ...$ids,
+            ...Tag::idsForNames(explode(',', (string) $request->input('new_tags'))),
+        ]));
     }
 
     private function sortColumn(Request $request): string

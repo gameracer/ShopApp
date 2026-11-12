@@ -7,6 +7,7 @@
     <x-slot:actions>
         <a href="{{ route('stock.create') }}" class="btn-secondary"><x-icon name="truck" class="h-4 w-4" /> {{ __('Add stock') }}</a>
         @if ($isOwner)
+            <a href="{{ route('products.import') }}" class="btn-secondary"><x-icon name="download" class="h-4 w-4 rotate-180" /> {{ __('Import') }}</a>
             <a href="{{ route('products.create') }}" class="btn-primary"><x-icon name="plus" class="h-4 w-4" /> {{ __('New product') }}</a>
         @endif
     </x-slot:actions>
