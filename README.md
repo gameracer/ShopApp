@@ -130,8 +130,9 @@ A product's barcode is its **SKU / Barcode** field. You can switch off the scan 
 **Dual-screen touch POS** (touch screen for the cashier, second screen facing the customer):
 
 - **Customer display.** As items are scanned or tapped, the customer sees each line, the total, the cash given and the change. After payment it shows *Thank you* with the change for 15 seconds, then a welcome screen with the shop name.
-  - **Desktop app:** opens it full screen on the second screen automatically, and follows screens being plugged in or out. The display never takes keyboard focus, so the barcode scanner keeps typing into the till. Turn it off or pick a screen under *View → Customer display* or *Settings → Devices on this computer*.
+  - **Desktop app:** opens it full screen on the second screen automatically, and follows screens being plugged in or out. The display never takes keyboard focus, so the barcode scanner keeps typing into the till. Turn it off or pick a screen under *View → Customer display* (**Ctrl+Shift+D**) or *Settings → Devices on this computer*.
   - **Web browser:** *Customer display* on *New sale* opens it in a popup. Drag it to the second screen and press F11. The page is `/display`. It needs no login because it only shows what the till sends it.
+- **Desktop app shortcuts.** **F11**: full screen on/off. **Ctrl+Shift+D**: customer display on/off. **Ctrl+Shift+M**: show/hide the menu bar (when hidden, **Alt** shows it for a moment). These choices are remembered on each computer.
 - **Touch screens.** Larger buttons, inputs and list rows, quick cash buttons (*Exact*, then round amounts above the total), number pads for amounts, and no accidental double-tap or pinch zoom. With a mouse, the screens look the same as before.
 
 ## Development

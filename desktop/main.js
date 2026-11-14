@@ -8,7 +8,7 @@
 //   storage/          Laravel storage (logs, sessions, compiled views)
 //   cache/            Laravel bootstrap cache
 //   backups/          automatic backups (before every update) + manual ones
-//   devices.json      this computer's receipt printer and customer display choice
+//   devices.json      this computer's receipt printer, customer display and menu bar choices
 //   logs/desktop.log  this shell's log
 
 const { app, BrowserWindow, Menu, dialog, ipcMain, screen, shell } = require('electron');
@@ -466,11 +466,21 @@ function buildMenu() {
                 { role: 'resetZoom' }, { role: 'zoomIn' }, { role: 'zoomOut' }, { type: 'separator' },
                 { role: 'togglefullscreen' }, { role: 'toggleDevTools' },
                 { type: 'separator' },
+                // Shortcuts work even while the menu bar is hidden.
                 {
                     label: 'Customer display (second screen)', type: 'checkbox', checked: displayPref() !== 'off',
+                    accelerator: 'CmdOrCtrl+Shift+D',
                     click: (item) => {
                         writeDevices({ customerDisplay: item.checked ? 'auto' : 'off' });
                         syncCustomerDisplay();
+                    },
+                },
+                {
+                    label: 'Show menu bar', type: 'checkbox', checked: menuBarVisible(),
+                    accelerator: 'CmdOrCtrl+Shift+M',
+                    click: (item) => {
+                        writeDevices({ menuBar: item.checked });
+                        applyMenuBar();
                     },
                 },
             ],
@@ -490,6 +500,17 @@ function buildMenu() {
             ],
         },
     ]));
+}
+
+// Menu bar on the till: hidden gives a touch screen more room. When hidden, Alt still
+// shows it for a moment, and Ctrl+Shift+M brings it back. Remembered per computer.
+const menuBarVisible = () => readDevices().menuBar !== false;
+
+function applyMenuBar() {
+    if (!mainWindow) return;
+    const visible = menuBarVisible();
+    mainWindow.setAutoHideMenuBar(!visible);
+    mainWindow.setMenuBarVisibility(visible);
 }
 
 const isInternal = (url) => Boolean(baseUrl) && (url.startsWith(baseUrl + '/') || url === baseUrl);
@@ -519,6 +540,7 @@ function createMainWindow() {
         splash?.destroy();
         splash = null;
     });
+    applyMenuBar();
     // Touch screens: no accidental pinch zoom (Ctrl +/- in the View menu still works).
     mainWindow.webContents.setVisualZoomLevelLimits(1, 1).catch(() => {});
     mainWindow.on('closed', () => {
