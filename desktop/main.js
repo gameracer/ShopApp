@@ -8,10 +8,10 @@
 //   storage/          Laravel storage (logs, sessions, compiled views)
 //   cache/            Laravel bootstrap cache
 //   backups/          automatic backups (before every update) + manual ones
-//   devices.json      this computer's receipt printer choice
+//   devices.json      this computer's receipt printer and customer display choice
 //   logs/desktop.log  this shell's log
 
-const { app, BrowserWindow, Menu, dialog, ipcMain, shell } = require('electron');
+const { app, BrowserWindow, Menu, dialog, ipcMain, screen, shell } = require('electron');
 const { autoUpdater } = require('electron-updater');
 const { spawn, execFile } = require('node:child_process');
 const crypto = require('node:crypto');
@@ -278,6 +278,101 @@ function setupDeviceIpc() {
         if (!fromApp(event)) throw new Error('Not allowed.');
         return printReceipt(String(url));
     });
+    ipcMain.handle('devices:displays', (event) => {
+        if (!fromApp(event)) throw new Error('Not allowed.');
+        return { displays: describeDisplays(), selected: displayPref(), active: Boolean(customerWindow) };
+    });
+    ipcMain.handle('devices:set-display', (event, value) => {
+        if (!fromApp(event)) throw new Error('Not allowed.');
+        writeDevices({ customerDisplay: typeof value === 'string' && value ? value : 'auto' });
+        syncCustomerDisplay();
+        buildMenu();
+        return true;
+    });
+}
+
+// ---------------------------------------------------------------- customer display
+//
+// Dual-screen POS: the till stays on the main screen, and a full-screen customer
+// display (the /display page) opens on another screen. It follows screens being
+// plugged in or out. Setting per computer (devices.json "customerDisplay"):
+// "auto" (first screen other than the till's, the default), "off", or a screen id.
+
+let customerWindow = null;
+
+function displayPref() {
+    return readDevices().customerDisplay ?? 'auto';
+}
+
+function tillDisplay() {
+    return mainWindow ? screen.getDisplayMatching(mainWindow.getBounds()) : screen.getPrimaryDisplay();
+}
+
+function customerDisplayTarget() {
+    const pref = displayPref();
+    if (pref === 'off') return null;
+    const till = tillDisplay();
+    const others = screen.getAllDisplays().filter((d) => d.id !== till.id);
+    return others.find((d) => String(d.id) === pref) ?? others[0] ?? null;
+}
+
+function syncCustomerDisplay() {
+    if (!mainWindow || !baseUrl) return;
+    const target = customerDisplayTarget();
+
+    if (!target) {
+        customerWindow?.destroy();
+        customerWindow = null;
+        return;
+    }
+    if (customerWindow) {
+        if (customerWindow.displayId === target.id) return;
+        customerWindow.setFullScreen(false);
+        customerWindow.setBounds(target.bounds);
+        customerWindow.setFullScreen(true);
+        customerWindow.displayId = target.id;
+        return;
+    }
+
+    customerWindow = new BrowserWindow({
+        ...target.bounds, show: false, frame: false, title: 'ShopApp – Customer display',
+        backgroundColor: '#0f172a', skipTaskbar: true, autoHideMenuBar: true,
+        // Never takes keyboard focus, so the barcode scanner keeps typing into the till.
+        focusable: false,
+        webPreferences: { contextIsolation: true, sandbox: true, nodeIntegration: false },
+    });
+    customerWindow.displayId = target.id;
+    customerWindow.removeMenu();
+    customerWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+    customerWindow.webContents.on('will-navigate', (event) => event.preventDefault());
+    customerWindow.webContents.setVisualZoomLevelLimits(1, 1).catch(() => {});
+    customerWindow.once('ready-to-show', () => {
+        customerWindow?.setFullScreen(true);
+        customerWindow?.showInactive();
+    });
+    customerWindow.on('closed', () => { customerWindow = null; });
+    customerWindow.loadURL(baseUrl + '/display');
+    log('Customer display opened on screen', target.id, `${target.size.width}x${target.size.height}`);
+}
+
+function describeDisplays() {
+    const primary = screen.getPrimaryDisplay();
+    const till = tillDisplay();
+    return screen.getAllDisplays().map((d, i) => ({
+        id: String(d.id),
+        label: `${d.label || `Screen ${i + 1}`} (${d.size.width}×${d.size.height})`,
+        primary: d.id === primary.id,
+        till: d.id === till.id,
+    }));
+}
+
+function watchDisplays() {
+    let timer = null;
+    const resync = () => { clearTimeout(timer); timer = setTimeout(syncCustomerDisplay, 800); };
+    screen.on('display-added', resync);
+    screen.on('display-removed', resync);
+    screen.on('display-metrics-changed', resync);
+    mainWindow?.on('moved', resync); // till dragged to another screen
 }
 
 // ---------------------------------------------------------------- server
@@ -370,6 +465,14 @@ function buildMenu() {
                 { role: 'reload' }, { type: 'separator' },
                 { role: 'resetZoom' }, { role: 'zoomIn' }, { role: 'zoomOut' }, { type: 'separator' },
                 { role: 'togglefullscreen' }, { role: 'toggleDevTools' },
+                { type: 'separator' },
+                {
+                    label: 'Customer display (second screen)', type: 'checkbox', checked: displayPref() !== 'off',
+                    click: (item) => {
+                        writeDevices({ customerDisplay: item.checked ? 'auto' : 'off' });
+                        syncCustomerDisplay();
+                    },
+                },
             ],
         },
         {
@@ -416,7 +519,12 @@ function createMainWindow() {
         splash?.destroy();
         splash = null;
     });
-    mainWindow.on('closed', () => { mainWindow = null; });
+    // Touch screens: no accidental pinch zoom (Ctrl +/- in the View menu still works).
+    mainWindow.webContents.setVisualZoomLevelLimits(1, 1).catch(() => {});
+    mainWindow.on('closed', () => {
+        mainWindow = null;
+        customerWindow?.destroy();
+    });
     mainWindow.loadURL(baseUrl + '/');
 }
 
@@ -498,6 +606,8 @@ async function boot() {
     buildMenu();
     setupDeviceIpc();
     createMainWindow();
+    watchDisplays();
+    mainWindow.once('show', syncCustomerDisplay);
     setupAutoUpdates();
 }
 

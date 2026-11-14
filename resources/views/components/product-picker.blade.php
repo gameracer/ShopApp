@@ -31,7 +31,7 @@
             <li>
                 <button type="button" @click="add(p)" @mouseenter="highlighted = i"
                         :class="i === highlighted ? 'bg-emerald-50' : ''"
-                        class="flex w-full items-center justify-between gap-3 px-4 py-2.5 text-left">
+                        class="pick-row flex w-full items-center justify-between gap-3 px-4 py-2.5 text-left active:bg-emerald-100">
                     <span class="min-w-0">
                         <span class="block truncate text-sm font-medium text-slate-900" x-text="p.name"></span>
                         <span class="flex flex-wrap gap-1 text-xs text-slate-500">

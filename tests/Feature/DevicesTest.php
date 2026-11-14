@@ -120,6 +120,21 @@ class DevicesTest extends TestCase
         $this->actingAs($owner)->get('/')->assertOk()->assertSee('name="shop-devices"', false);
     }
 
+    public function test_customer_display_opens_without_login_and_shows_the_shop(): void
+    {
+        Setting::put(['shop_name' => 'Duka la Mama']);
+
+        $this->get('/display')->assertOk()->assertSee('Duka la Mama')->assertSee('customerDisplay', false);
+    }
+
+    public function test_till_mirrors_the_cart_to_the_customer_display(): void
+    {
+        $this->actingAs(User::factory()->seller()->create())->get('/sales/new')
+            ->assertOk()
+            ->assertSee('x-effect="broadcast()"', false)
+            ->assertSee('cashSuggestions', false);
+    }
+
     private function sell(User $seller): Sale
     {
         $product = Product::factory()->create(['quantity' => 10]);

@@ -3,7 +3,16 @@
 
 @section('content')
 @php $isOwner = auth()->user()->isOwner(); @endphp
-<x-page-header :title="__('New sale')" :subtitle="__('Search and click items to add them to the cart. Use ↑ ↓ and Enter for quick selection.')" />
+<x-page-header :title="__('New sale')" :subtitle="__('Search and click items to add them to the cart. Use ↑ ↓ and Enter for quick selection.')">
+    <x-slot:actions>
+        {{-- The desktop app opens the customer display on the second screen by itself. --}}
+        <button type="button" x-data x-show="!window.ShopDevices?.desktop" class="btn-secondary"
+                onclick="window.open('{{ route('display') }}', 'shopapp-display', 'popup,width=1024,height=768')"
+                title="{{ __('Open the customer display, drag it to the second screen and press F11') }}">
+            <x-icon name="user" class="h-4 w-4" /> {{ __('Customer display') }}
+        </button>
+    </x-slot:actions>
+</x-page-header>
 
 <div x-data="posApp(@js([
         'searchUrl' => route('products.search'),
@@ -17,7 +26,7 @@
             'noMoreStock' => __('No more :name in stock.'),
             'expired' => __(':name has expired and cannot be sold.'),
         ],
-    ]))" class="grid gap-6 lg:grid-cols-5">
+    ]))" x-effect="broadcast()" class="grid gap-6 lg:grid-cols-5">
     <div class="lg:col-span-2">
         <x-product-picker :tags="$tags" />
     </div>
@@ -41,13 +50,13 @@
                             <td>
                                 <div class="flex items-center gap-1">
                                     <button type="button" class="btn-secondary btn-sm" @click="line.quantity = Math.max(1, line.quantity - 1)">−</button>
-                                    <input type="number" step="0.01" min="0.01" :max="line.stock" x-model.number="line.quantity" @change="clampQty(line)" class="input w-16 px-1 text-center">
+                                    <input type="number" inputmode="decimal" step="0.01" min="0.01" :max="line.stock" x-model.number="line.quantity" @change="clampQty(line)" class="input w-16 px-1 text-center">
                                     <button type="button" class="btn-secondary btn-sm" @click="line.quantity < line.stock && line.quantity++">+</button>
                                 </div>
                             </td>
                             <td class="text-right">
                                 @if ($isOwner)
-                                    <input type="number" step="0.01" min="0" x-model.number="line.unit_price" class="input w-28 text-right">
+                                    <input type="number" inputmode="decimal" step="0.01" min="0" x-model.number="line.unit_price" class="input w-28 text-right">
                                 @else
                                     <span x-text="money(line.unit_price)"></span>
                                 @endif
@@ -79,10 +88,17 @@
                 </div>
             </div>
 
+            <div x-show="paymentMethod === 'cash'" class="flex flex-wrap gap-2">
+                <template x-for="(amount, i) in cashSuggestions" :key="amount">
+                    <button type="button" @click="cashGiven = amount" class="btn-secondary"
+                            :class="Number(cashGiven) === amount && 'border-emerald-600 bg-emerald-50 text-emerald-800'"
+                            x-text="i === 0 ? @js(__('Exact')) : money(amount)"></button>
+                </template>
+            </div>
             <div x-show="paymentMethod === 'cash'" class="grid gap-3 sm:grid-cols-2">
                 <div>
                     <label class="label">{{ __('Cash received') }}</label>
-                    <input type="number" step="0.01" min="0" x-model="cashGiven" class="input">
+                    <input type="number" inputmode="decimal" step="0.01" min="0" x-model="cashGiven" class="input">
                 </div>
                 <div>
                     <span class="label">{{ __('Change') }}</span>
@@ -105,7 +121,7 @@
                 <div x-show="isCredit" class="grid gap-3 sm:grid-cols-3">
                     <div>
                         <label class="label">{{ __('Amount paid now') }}</label>
-                        <input type="number" step="0.01" min="0" x-model="amountPaid" class="input" placeholder="0.00">
+                        <input type="number" inputmode="decimal" step="0.01" min="0" x-model="amountPaid" class="input" placeholder="0.00">
                     </div>
                     <div>
                         <label class="label">{{ __('Due date') }}</label>

@@ -68,6 +68,57 @@
     }
 }
 
+/*
+ * Touch screens (POS terminals, tablets): finger-sized targets, no double-tap zoom,
+ * no text selection on long-press. Mouse users are unaffected.
+ */
+html {
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+}
+
+@media (pointer: coarse) {
+    .btn-primary,
+    .btn-secondary,
+    .btn-danger {
+        min-height: 3rem;
+        padding-inline: 1.1rem;
+        font-size: 1rem;
+    }
+    .btn-sm {
+        min-height: 2.75rem;
+        min-width: 2.75rem;
+        font-size: 1rem;
+    }
+    .input {
+        min-height: 3rem;
+        font-size: 1rem;
+    }
+    .nav-link {
+        padding-block: 0.8rem;
+        font-size: 1rem;
+    }
+    .table td {
+        padding-block: 0.75rem;
+    }
+    /* Product search results on the till / stock-in. */
+    .pick-row {
+        padding-block: 0.9rem;
+    }
+    button,
+    a,
+    .nav-link,
+    .pick-row {
+        user-select: none;
+        -webkit-user-select: none;
+    }
+    input[type='checkbox'],
+    input[type='radio'] {
+        width: 1.4rem;
+        height: 1.4rem;
+    }
+}
+
 @media print {
     .no-print {
         display: none !important;

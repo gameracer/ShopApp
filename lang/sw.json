@@ -341,5 +341,16 @@
     "Waiting for a scan…": "Inasubiri kuskaniwa…",
     "Will print to": "Itachapisha kwenye",
     "Windows default": "Chaguo-msingi la Windows",
-    "e.g. Goods once sold are not returnable": "mf. Bidhaa zilizouzwa hazirudishwi"
+    "e.g. Goods once sold are not returnable": "mf. Bidhaa zilizouzwa hazirudishwi",
+    "Customer display": "Skrini ya mteja",
+    "Customer display (second screen)": "Skrini ya mteja (skrini ya pili)",
+    "Open the customer display, drag it to the second screen and press F11": "Fungua skrini ya mteja, iburute hadi skrini ya pili kisha bonyeza F11",
+    "Automatic (any second screen)": "Otomatiki (skrini yoyote ya pili)",
+    "Off": "Imezimwa",
+    "screen(s) connected.": "skrini zimeunganishwa.",
+    "Connect a second screen to show customers their items and total.": "Unganisha skrini ya pili kuonyesha wateja bidhaa zao na jumla.",
+    "Welcome": "Karibu",
+    "Thank you!": "Asante!",
+    "items": "bidhaa",
+    "Exact": "Kamili"
 }

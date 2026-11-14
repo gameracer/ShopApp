@@ -21,6 +21,9 @@ use Illuminate\Support\Facades\Route;
 
 Route::get('/locale/{locale}', LocaleController::class)->name('locale.switch');
 
+// Customer-facing second screen. Public: it only shows what the till broadcasts to it.
+Route::view('/display', 'display')->name('display');
+
 Route::middleware('guest')->group(function () {
     Route::get('/login', [LoginController::class, 'show'])->name('login');
     Route::post('/login', [LoginController::class, 'login'])->middleware('throttle:10,1');

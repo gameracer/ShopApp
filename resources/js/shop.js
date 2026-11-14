@@ -1,4 +1,5 @@
 import { beep, lookupBarcode } from './devices';
+import { displayChannel } from './display';
 
 /**
  * Merge component parts keeping getters live ({...a} would freeze them to their current value).
@@ -134,6 +135,9 @@ function productSearch(config) {
 }
 
 export function posApp(config) {
+    // Kept outside the reactive object: native objects break behind Alpine's proxy.
+    const display = displayChannel();
+
     return compose(productSearch({ ...config, inStockOnly: true }), {
         cart: [],
         paymentMethod: 'cash',
@@ -143,6 +147,41 @@ export function posApp(config) {
         newCustomerPhone: '',
         dueDate: '',
         cashGiven: '',
+
+        init() {
+            this.search();
+            // A customer display that opens later asks for the current cart.
+            if (display) display.onmessage = ({ data }) => data?.type === 'hello' && this.broadcast();
+        },
+
+        /** Mirror the cart on the customer display. Re-runs on every change via x-effect. */
+        broadcast() {
+            display?.postMessage({
+                type: 'cart',
+                lines: this.cart.map((l) => ({
+                    name: l.name,
+                    unit: l.unit,
+                    quantity: Number(l.quantity),
+                    price: Number(l.unit_price),
+                    subtotal: Number(l.unit_price) * Number(l.quantity),
+                })),
+                total: this.total,
+                method: this.paymentMethod,
+                cashGiven: Number(this.cashGiven || 0),
+                change: this.change,
+            });
+        },
+
+        /** One-tap cash amounts: exact, then the next round notes above the total. */
+        get cashSuggestions() {
+            const total = this.total;
+            if (total <= 0) return [];
+            const m = 10 ** Math.floor(Math.log10(total));
+            const rounds = [m / 2, m, 2 * m, 5 * m, 10 * m]
+                .map((step) => Math.ceil(total / step) * step)
+                .filter((v) => v > total);
+            return [...new Set([total, ...rounds])].slice(0, 5);
+        },
 
         add(product) {
             const line = this.cart.find((l) => l.product_id === product.id);
@@ -212,7 +251,16 @@ export function posApp(config) {
                 new_customer_phone: this.customerId ? null : this.newCustomerPhone || null,
                 due_date: this.isCredit ? this.dueDate || null : null,
             });
-            if (data && data.redirect) window.location = data.redirect;
+            if (data && data.redirect) {
+                display?.postMessage({
+                    type: 'paid',
+                    total: this.total,
+                    paid: this.isCredit ? Number(this.amountPaid || 0) : Math.max(this.total, Number(this.cashGiven || 0)),
+                    change: this.paymentMethod === 'cash' ? this.change : 0,
+                    balance: this.isCredit ? this.balanceDue : 0,
+                });
+                window.location = data.redirect;
+            }
         },
     });
 }

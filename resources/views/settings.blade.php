@@ -64,6 +64,8 @@
      x-data="{
         desktop: !!window.ShopDevices?.desktop,
         printers: [],
+        screens: [],
+        screen: 'auto',
         printer: '',
         detected: null,
         status: null,
@@ -74,6 +76,12 @@
             this.printers = info.printers;
             this.printer = info.selected ?? '';
             this.detected = info.detected;
+            const screens = await ShopDevices.desktop.displays();
+            this.screens = screens.displays;
+            this.screen = screens.selected;
+        },
+        async chooseScreen() {
+            await ShopDevices.desktop.setDisplay(this.screen);
         },
         async choose() {
             await ShopDevices.desktop.setPrinter(this.printer || null);
@@ -117,6 +125,31 @@
         <div class="flex items-center gap-3">
             <button type="button" @click="test()" class="btn-secondary"><x-icon name="print" class="h-4 w-4" /> {{ __('Print test receipt') }}</button>
             <span x-cloak x-show="status" x-text="status?.text" :class="status?.ok ? 'text-emerald-700' : 'text-rose-700'" class="text-sm"></span>
+        </div>
+    </div>
+
+    <div class="space-y-2 border-t border-slate-100 pt-4">
+        <span class="label">{{ __('Customer display (second screen)') }}</span>
+        <template x-if="desktop">
+            <div class="space-y-2">
+                <select x-model="screen" @change="chooseScreen()" class="input">
+                    <option value="auto">{{ __('Automatic (any second screen)') }}</option>
+                    <option value="off">{{ __('Off') }}</option>
+                    <template x-for="s in screens.filter((s) => !s.till)" :key="s.id">
+                        <option :value="s.id" x-text="s.label" :selected="s.id === screen"></option>
+                    </template>
+                </select>
+                <p class="text-xs text-slate-500">
+                    <span x-text="screens.length"></span> {{ __('screen(s) connected.') }}
+                    <span x-show="screens.length < 2">{{ __('Connect a second screen to show customers their items and total.') }}</span>
+                </p>
+            </div>
+        </template>
+        <div x-show="!desktop" class="space-y-2">
+            <p class="text-sm text-slate-600">{{ __('Open the customer display, drag it to the second screen and press F11') }}.</p>
+            <button type="button" class="btn-secondary" onclick="window.open('{{ route('display') }}', 'shopapp-display', 'popup,width=1024,height=768')">
+                <x-icon name="user" class="h-4 w-4" /> {{ __('Customer display') }}
+            </button>
         </div>
     </div>
 
