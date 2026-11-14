@@ -1,10 +1,22 @@
+import { beep, lookupBarcode } from './devices';
+
+/**
+ * Merge component parts keeping getters live ({...a} would freeze them to their current value).
+ */
+function compose(...parts) {
+    return parts.reduce((target, part) => Object.defineProperties(target, Object.getOwnPropertyDescriptors(part)), {});
+}
+
 /**
  * Shared behaviour for screens that search products (POS + stock in).
  * Searches by name, SKU/barcode or tag, and narrows by selected tag chips.
+ * A barcode scan (see devices.js) looks the code up and hands the product to acceptScan().
  */
 function productSearch(config) {
     return {
         query: '',
+        scanNotice: null,
+        _noticeTimer: null,
         selectedTags: [],
         results: [],
         loading: false,
@@ -55,6 +67,28 @@ function productSearch(config) {
             if (p) this.add(p);
         },
 
+        async onScan(event) {
+            event.preventDefault();
+            const code = event.detail.code;
+            let product = null;
+            try {
+                product = await lookupBarcode(code);
+            } catch {
+                return this.notify(false, config.i18n.failed);
+            }
+            if (!product) return this.notify(false, config.i18n.notFound.replace(':code', code), code);
+
+            const error = this.acceptScan(product);
+            error ? this.notify(false, error) : this.notify(true, product.name);
+        },
+
+        notify(ok, text, unknownCode = null) {
+            beep(ok);
+            this.scanNotice = { ok, text, unknownCode };
+            clearTimeout(this._noticeTimer);
+            this._noticeTimer = setTimeout(() => (this.scanNotice = null), ok ? 2500 : 6000);
+        },
+
         money(value) {
             return `${config.currency} ${Number(value || 0).toLocaleString(undefined, {
                 minimumFractionDigits: 2,
@@ -100,8 +134,7 @@ function productSearch(config) {
 }
 
 export function posApp(config) {
-    return {
-        ...productSearch({ ...config, inStockOnly: true }),
+    return compose(productSearch({ ...config, inStockOnly: true }), {
         cart: [],
         paymentMethod: 'cash',
         amountPaid: '',
@@ -127,6 +160,17 @@ export function posApp(config) {
             }
             this.query = '';
             this.$nextTick(() => this.$refs.search?.focus());
+        },
+
+        /** Scanned item: add one to the cart, or say why it can't be sold. */
+        acceptScan(product) {
+            const name = (text) => text.replace(':name', product.name);
+            if (product.expired) return name(config.i18n.expired);
+            if (product.quantity <= 0) return name(config.i18n.outOfStock);
+            const line = this.cart.find((l) => l.product_id === product.id);
+            if (line && line.quantity >= product.quantity) return name(config.i18n.noMoreStock);
+            this.add(product);
+            return null;
         },
 
         remove(index) {
@@ -170,12 +214,11 @@ export function posApp(config) {
             });
             if (data && data.redirect) window.location = data.redirect;
         },
-    };
+    });
 }
 
 export function stockApp(config) {
-    return {
-        ...productSearch(config),
+    return compose(productSearch(config), {
         lines: [],
         supplier: '',
 
@@ -200,6 +243,18 @@ export function stockApp(config) {
             this.$nextTick(() => this.$refs.search?.focus());
         },
 
+        /** Scanned item: add a line, or count one more on its existing line. */
+        acceptScan(product) {
+            const line = this.lines.find((l) => l.product_id === product.id);
+            if (line) {
+                line.quantity = Number(line.quantity || 0) + 1;
+            } else {
+                this.add(product);
+            }
+            this.query = '';
+            return null;
+        },
+
         remove(index) {
             this.lines.splice(index, 1);
         },
@@ -222,5 +277,5 @@ export function stockApp(config) {
             });
             if (data && data.redirect) window.location = data.redirect;
         },
-    };
+    });
 }

@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Customer;
 use App\Models\Sale;
+use App\Models\Setting;
 use App\Models\Tag;
 use App\Models\User;
 use App\Services\SaleService;
@@ -88,19 +89,42 @@ class SaleController extends Controller
 
         session()->flash('success', __('Sale completed.'));
 
+        // With auto-print on, the sale page prints the receipt once when it opens.
+        $url = Setting::get('auto_print_receipt') === '1'
+            ? route('sales.show', [$sale, 'print' => 1])
+            : route('sales.show', $sale);
+
         if ($request->expectsJson()) {
-            return response()->json(['id' => $sale->id, 'redirect' => route('sales.show', $sale)]);
+            return response()->json(['id' => $sale->id, 'redirect' => $url]);
         }
 
-        return redirect()->route('sales.show', $sale);
+        return redirect($url);
     }
 
     public function show(Request $request, Sale $sale)
     {
-        $user = $request->user();
-        abort_if($user->isSeller() && $sale->user_id !== $user->id && ! $sale->customer_id, 403);
+        $this->authorizeView($request, $sale);
 
         return view('sales.show', ['sale' => $sale->load('items', 'customer', 'user', 'payments.user')]);
+    }
+
+    /**
+     * Bare receipt sized for a 58 mm / 80 mm thermal printer.
+     */
+    public function receipt(Request $request, Sale $sale)
+    {
+        $this->authorizeView($request, $sale);
+
+        return view('sales.receipt', [
+            'sale' => $sale->load('items', 'customer', 'user'),
+            'paper' => Setting::get('receipt_width'),
+        ]);
+    }
+
+    private function authorizeView(Request $request, Sale $sale): void
+    {
+        $user = $request->user();
+        abort_if($user->isSeller() && $sale->user_id !== $user->id && ! $sale->customer_id, 403);
     }
 
     public function destroy(Sale $sale, SaleService $service)

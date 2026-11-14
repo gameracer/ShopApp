@@ -50,7 +50,38 @@ class ProductController extends Controller
             ->limit(30)
             ->get();
 
-        return response()->json($products->map(fn (Product $p) => [
+        return response()->json($products->map(fn (Product $p) => $this->payload($p, $isOwner)));
+    }
+
+    /**
+     * Exact SKU / barcode lookup, used when a barcode scanner reads a code.
+     * JSON callers (POS, stock in) get the product or a 404; a plain visit
+     * opens the product, or offers the owner to create it when the code is unknown.
+     */
+    public function barcode(Request $request)
+    {
+        $code = trim((string) $request->query('code'));
+        $product = $code === '' ? null : Product::with('tags:id,name,color')->where('sku', $code)->first();
+
+        if ($request->expectsJson()) {
+            return $product
+                ? response()->json($this->payload($product, $request->user()->isOwner()))
+                : response()->json(['message' => __('No product has the barcode :code.', ['code' => $code])], 404);
+        }
+
+        if ($product) {
+            return redirect()->route('products.show', $product);
+        }
+
+        return $request->user()->isOwner() && $code !== ''
+            ? redirect()->route('products.create', ['sku' => $code])
+                ->with('success', __('No product has the barcode :code. Add it now.', ['code' => $code]))
+            : redirect()->route('products.index', ['q' => $code]);
+    }
+
+    private function payload(Product $p, bool $isOwner): array
+    {
+        return [
             'id' => $p->id,
             'name' => $p->name,
             'sku' => $p->sku,
@@ -59,13 +90,17 @@ class ProductController extends Controller
             'buying_price' => $isOwner ? (float) $p->buying_price : null,
             'quantity' => (float) $p->quantity,
             'expiry_date' => $p->expiry_date?->toDateString(),
+            'expired' => $p->isExpired(),
             'tags' => $p->tags->map(fn ($t) => ['id' => $t->id, 'name' => $t->name, 'color' => $t->color]),
-        ]));
+        ];
     }
 
-    public function create()
+    public function create(Request $request)
     {
-        return view('products.form', ['product' => new Product(['unit' => 'pcs']), 'tags' => Tag::orderBy('name')->get()]);
+        // ?sku= comes from scanning an unknown barcode.
+        $sku = trim((string) $request->query('sku')) ?: null;
+
+        return view('products.form', ['product' => new Product(['unit' => 'pcs', 'sku' => $sku]), 'tags' => Tag::orderBy('name')->get()]);
     }
 
     public function store(Request $request)

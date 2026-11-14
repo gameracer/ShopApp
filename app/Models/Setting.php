@@ -15,7 +15,15 @@ class Setting extends Model
         'shop_address' => '',
         'currency' => 'TZS',
         'expiry_alert_days' => '30',
+        // Devices: thermal receipt printer + barcode scanner.
+        'receipt_width' => '80',
+        'receipt_footer' => '',
+        'auto_print_receipt' => '0',
+        'scanner_beep' => '1',
     ];
+
+    /** Thermal paper roll widths in millimetres. */
+    public const RECEIPT_WIDTHS = ['58', '80'];
 
     public static function get(string $key, mixed $default = null): mixed
     {

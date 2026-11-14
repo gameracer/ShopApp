@@ -4,6 +4,11 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
+    {{-- Barcode scanner / receipt printer settings for resources/js/devices.js --}}
+    <meta name="shop-devices" content="{{ json_encode([
+        'lookupUrl' => route('products.barcode'),
+        'beep' => \App\Models\Setting::get('scanner_beep') === '1',
+    ]) }}">
     <title>@yield('title', __('Dashboard')) · {{ $shopName ?? config('app.name') }}</title>
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>

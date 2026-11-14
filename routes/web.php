@@ -41,6 +41,7 @@ Route::middleware('auth')->group(function () {
 
     // Products: everyone can browse / search, only the owner manages them.
     Route::get('/products/search', [ProductController::class, 'search'])->name('products.search');
+    Route::get('/products/barcode', [ProductController::class, 'barcode'])->name('products.barcode');
     Route::middleware('role:owner')->group(function () {
         Route::get('/products/import', [ProductImportController::class, 'create'])->name('products.import');
         Route::post('/products/import', [ProductImportController::class, 'store'])->name('products.import.store')->middleware('throttle:10,1');
@@ -59,6 +60,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/sales/new', [SaleController::class, 'create'])->name('sales.create');
     Route::post('/sales', [SaleController::class, 'store'])->name('sales.store');
     Route::get('/sales/{sale}', [SaleController::class, 'show'])->name('sales.show');
+    Route::get('/sales/{sale}/receipt', [SaleController::class, 'receipt'])->name('sales.receipt');
     Route::post('/sales/{sale}/payments', [CreditController::class, 'pay'])->name('sales.payments.store');
 
     // Customers & credit
@@ -75,5 +77,6 @@ Route::middleware('auth')->group(function () {
         Route::resource('users', UserController::class)->except(['show']);
         Route::get('/settings', [SettingController::class, 'edit'])->name('settings.edit');
         Route::put('/settings', [SettingController::class, 'update'])->name('settings.update');
+        Route::get('/settings/test-receipt', [SettingController::class, 'testReceipt'])->name('settings.test-receipt');
     });
 });

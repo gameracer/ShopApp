@@ -1,11 +1,20 @@
 @props(['tags', 'showStock' => true])
-{{-- Shared search panel used inside posApp / stockApp Alpine components --}}
-<div class="card">
+{{-- Shared search panel used inside posApp / stockApp Alpine components. Also receives barcode scans. --}}
+<div class="card" @barcode.window="onScan($event)">
     <div class="space-y-3 border-b border-slate-100 p-4">
         <div class="relative">
             <x-icon name="search" class="pointer-events-none absolute top-2.5 left-3 h-4 w-4 text-slate-400" />
             <input x-ref="search" x-model="query" @input="onQuery" @keydown.arrow-down.prevent="move(1)" @keydown.arrow-up.prevent="move(-1)" @keydown.enter.prevent="pickHighlighted()"
                    class="input pl-9" placeholder="{{ __('Type product name, scan barcode or #tag…') }}" autofocus autocomplete="off">
+        </div>
+        <div x-cloak x-show="scanNotice" x-transition.opacity
+             :class="scanNotice?.ok ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-rose-200 bg-rose-50 text-rose-700'"
+             class="flex flex-wrap items-center justify-between gap-2 rounded-lg border px-3 py-2 text-sm" role="status">
+            <span><span x-text="scanNotice?.ok ? '✓' : '✕'"></span> <span x-text="scanNotice?.text"></span></span>
+            @if (auth()->user()?->isOwner())
+                <a x-show="scanNotice?.unknownCode" :href="'{{ route('products.create') }}?sku=' + encodeURIComponent(scanNotice?.unknownCode ?? '')"
+                   class="font-medium underline">{{ __('Add product with this barcode') }}</a>
+            @endif
         </div>
         @if ($tags->isNotEmpty())
             <div class="flex flex-wrap gap-1.5">

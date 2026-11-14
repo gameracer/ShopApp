@@ -8,9 +8,10 @@
 //   storage/          Laravel storage (logs, sessions, compiled views)
 //   cache/            Laravel bootstrap cache
 //   backups/          automatic backups (before every update) + manual ones
+//   devices.json      this computer's receipt printer choice
 //   logs/desktop.log  this shell's log
 
-const { app, BrowserWindow, Menu, dialog, shell } = require('electron');
+const { app, BrowserWindow, Menu, dialog, ipcMain, shell } = require('electron');
 const { autoUpdater } = require('electron-updater');
 const { spawn, execFile } = require('node:child_process');
 const crypto = require('node:crypto');
@@ -30,6 +31,7 @@ const STORAGE = path.join(DATA, 'storage');
 const CACHE = path.join(DATA, 'cache');
 const BACKUPS = path.join(DATA, 'backups');
 const LOGS = path.join(DATA, 'logs');
+const DEVICES = path.join(DATA, 'devices.json');
 const KEEP_BACKUPS = 30;
 const PREFERRED_PORT = 8765;
 
@@ -183,6 +185,101 @@ async function restoreBackup() {
     }
 }
 
+// ---------------------------------------------------------------- devices
+//
+// Receipt printers are used through their Windows driver, so any printer Windows
+// knows about works: plug it in (install the maker's driver if Windows doesn't
+// find one) and it shows up. With no printer chosen in Settings, a receipt
+// printer is detected by name, falling back to the Windows default printer.
+// Barcode scanners need nothing here: they act as a keyboard (see resources/js/devices.js).
+
+const RECEIPT_PRINTER = /\b(pos|receipt|thermal)\b|pos-?\d|xp-?\d|xprinter|\btm-|tsp\d|rongta|gprinter|bixolon|sewoo|\b(58|80) ?mm\b/i;
+const VIRTUAL_PRINTER = /pdf|xps|onenote|fax|send to/i;
+
+function readDevices() {
+    try { return JSON.parse(fs.readFileSync(DEVICES, 'utf8')); } catch { return {}; }
+}
+
+function writeDevices(values) {
+    fs.writeFileSync(DEVICES, JSON.stringify({ ...readDevices(), ...values }, null, 2));
+}
+
+async function listPrinters(webContents) {
+    return (await webContents.getPrintersAsync()).map((p) => ({
+        name: p.name,
+        displayName: p.displayName || p.name,
+        isDefault: Boolean(p.isDefault || p.options?.['printer-is-default'] === 'true' || p.options?.isDefault === 'true'),
+    }));
+}
+
+/** The printer receipts go to: the saved choice if still installed, else a detected receipt printer, else the default. */
+function resolvePrinter(printers) {
+    const { printer } = readDevices();
+    return printers.find((p) => p.name === printer)
+        ?? printers.find((p) => RECEIPT_PRINTER.test(`${p.name} ${p.displayName}`) && !VIRTUAL_PRINTER.test(p.name))
+        ?? printers.find((p) => p.isDefault)
+        ?? null;
+}
+
+async function printReceipt(url) {
+    if (!isInternal(url)) throw new Error('Only ShopApp pages can be printed.');
+
+    const win = new BrowserWindow({
+        show: false, width: 420, height: 900,
+        webPreferences: { contextIsolation: true, sandbox: true, nodeIntegration: false },
+    });
+    try {
+        await win.loadURL(url);
+        const page = await win.webContents.executeJavaScript(
+            '({ paper: document.body?.dataset.paper, height: document.documentElement.scrollHeight })');
+        if (!page.paper) throw new Error('The receipt could not be opened.');
+
+        const printer = resolvePrinter(await listPrinters(win.webContents));
+        // Thermal paper is a roll: make the page exactly as long as the receipt (px -> microns, +5 mm).
+        const pageSize = {
+            width: (page.paper === '58' ? 58 : 80) * 1000,
+            height: Math.max(20000, Math.ceil((page.height * 25400) / 96) + 5000),
+        };
+        await new Promise((resolve, reject) => {
+            win.webContents.print({
+                silent: true, printBackground: true, deviceName: printer?.name,
+                margins: { marginType: 'none' }, pageSize,
+            }, (ok, reason) => (ok ? resolve() : reject(new Error(reason || 'Printing failed.'))));
+        });
+        log('Receipt printed on', printer?.name ?? 'default printer', url);
+        return { ok: true, printer: printer?.displayName ?? null };
+    } catch (e) {
+        log('Receipt print failed:', e.message);
+        return { ok: false, error: e.message };
+    } finally {
+        win.destroy();
+    }
+}
+
+function setupDeviceIpc() {
+    const fromApp = (event) => isInternal(event.senderFrame?.url ?? '');
+
+    ipcMain.handle('devices:printers', async (event) => {
+        if (!fromApp(event)) throw new Error('Not allowed.');
+        const printers = await listPrinters(event.sender);
+        const selected = readDevices().printer ?? null;
+        return {
+            printers,
+            selected: printers.some((p) => p.name === selected) ? selected : null,
+            detected: resolvePrinter(printers)?.displayName ?? null,
+        };
+    });
+    ipcMain.handle('devices:set-printer', (event, name) => {
+        if (!fromApp(event)) throw new Error('Not allowed.');
+        writeDevices({ printer: typeof name === 'string' && name ? name : null });
+        return true;
+    });
+    ipcMain.handle('devices:print-receipt', (event, url) => {
+        if (!fromApp(event)) throw new Error('Not allowed.');
+        return printReceipt(String(url));
+    });
+}
+
 // ---------------------------------------------------------------- server
 
 function startServer(port) {
@@ -292,13 +389,16 @@ function buildMenu() {
     ]));
 }
 
+const isInternal = (url) => Boolean(baseUrl) && (url.startsWith(baseUrl + '/') || url === baseUrl);
+
 function createMainWindow() {
     mainWindow = new BrowserWindow({
         width: 1280, height: 820, minWidth: 900, minHeight: 600, show: false, title: 'ShopApp',
-        webPreferences: { contextIsolation: true, sandbox: true, nodeIntegration: false },
+        webPreferences: {
+            contextIsolation: true, sandbox: true, nodeIntegration: false,
+            preload: path.join(__dirname, 'preload.js'),
+        },
     });
-
-    const isInternal = (url) => url.startsWith(baseUrl + '/') || url === baseUrl;
 
     // Same-origin popups (e.g. printable receipts) stay in the app; everything else opens in the browser.
     mainWindow.webContents.setWindowOpenHandler(({ url }) => {
@@ -396,6 +496,7 @@ async function boot() {
     log(`ShopApp ${app.getVersion()} running at ${baseUrl}`);
 
     buildMenu();
+    setupDeviceIpc();
     createMainWindow();
     setupAutoUpdates();
 }

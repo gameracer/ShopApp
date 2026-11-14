@@ -18,6 +18,7 @@ A shop management app built with **Laravel 13** and **Tailwind CSS 4** (with Alp
 
 Other details:
 - **Point of sale.** Use ↑/↓ and Enter to pick items or a barcode scanner, and the change due is worked out for cash sales. A sale can be paid by cash, mobile money, bank or credit, and has a printable receipt.
+- **Barcode scanner and receipt printer.** See [Hardware](#hardware-barcode-scanner--receipt-printer) below.
 - **Stock checks.** Stock goes down automatically on every sale. You cannot sell more than you have, and expired items cannot be sold.
 - **Deleting a sale (owner only)** puts its items back in stock.
 - **What sellers cannot do.** Sellers never see buying prices or profit, and cannot change prices. They can sell, add stock, and manage customers and credit.
@@ -102,6 +103,29 @@ npm run release -- patch     # bump version, commit, tag vX.Y.Z, build
 ```
 
 See **[desktop/BUILD.md](desktop/BUILD.md)** for the full procedure: setup, testing, versioning, publishing auto-updates, code signing and troubleshooting.
+
+## Hardware: barcode scanner & receipt printer
+
+Both are plug and play, with no extra software in ShopApp.
+
+**Barcode scanner** (USB or Bluetooth, in keyboard mode, which is the default for almost all scanners). Plug it in and scan. ShopApp tells a scan from typing by how fast the keys arrive:
+
+| Where you scan | What happens |
+|---|---|
+| *New sale* | The item is added to the cart, or its quantity goes up by one. Out-of-stock and expired items are refused with a warning beep. |
+| *Add stock* | The item is added, or its quantity goes up by one. |
+| *New / Edit product* | The code goes into *SKU / Barcode*. |
+| Anywhere else | The product opens. If the code is unknown, the owner goes to *New product* with the code filled in. |
+
+A product's barcode is its **SKU / Barcode** field. You can switch off the scan beep in *Settings*, and *Settings → Devices on this computer* has a box for testing the scanner.
+
+**Thermal receipt printer** (58 mm or 80 mm, USB/LAN/Bluetooth, any brand with a Windows driver, e.g. Xprinter, Epson TM, Rongta). Plug it in, and install the maker's driver if Windows does not find one. Then:
+
+- *Settings → Receipt printer & barcode scanner* sets the paper width, a footer line, and **auto-print after every sale**.
+- *Print receipt* on a sale prints a receipt sized for the roll. *A4* prints the full page.
+- **Desktop app**: prints with no dialog. Under *Settings → Devices on this computer* you can leave the printer on *Automatic* (it finds a printer named like POS/receipt/thermal/XP-/TM-, otherwise uses the Windows default) or pick one. The choice is saved per computer in `%APPDATA%\ShopApp\devices.json`. Use *Print test receipt* to check the width.
+- **Web browser**: the print window opens. Choose the receipt printer, set margins to *None*, and the browser remembers it.
+- **Cash drawer** (RJ11 into the printer): turn on the driver's *open cash drawer* option (in Xprinter/Epson drivers, under *Printing Preferences → Peripherals / Cash Drawer*). It opens on every receipt.
 
 ## Development
 

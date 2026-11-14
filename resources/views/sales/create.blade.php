@@ -10,7 +10,13 @@
         'storeUrl' => route('sales.store'),
         'currency' => \App\Support\Shop::currency(),
         'canEditPrice' => $isOwner,
-        'i18n' => ['failed' => __('Something went wrong. Please try again.')],
+        'i18n' => [
+            'failed' => __('Something went wrong. Please try again.'),
+            'notFound' => __('No product has the barcode :code.'),
+            'outOfStock' => __(':name is out of stock.'),
+            'noMoreStock' => __('No more :name in stock.'),
+            'expired' => __(':name has expired and cannot be sold.'),
+        ],
     ]))" class="grid gap-6 lg:grid-cols-5">
     <div class="lg:col-span-2">
         <x-product-picker :tags="$tags" />

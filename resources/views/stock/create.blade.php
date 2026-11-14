@@ -20,7 +20,10 @@
             'quantity' => (float) $preselected->quantity, 'buying_price' => $isOwner ? (float) $preselected->buying_price : null,
             'selling_price' => (float) $preselected->selling_price,
         ] : null,
-        'i18n' => ['failed' => __('Something went wrong. Please try again.')],
+        'i18n' => [
+            'failed' => __('Something went wrong. Please try again.'),
+            'notFound' => __('No product has the barcode :code.'),
+        ],
     ]))" class="grid gap-6 lg:grid-cols-5">
     <div class="lg:col-span-2">
         <x-product-picker :tags="$tags" />

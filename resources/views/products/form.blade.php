@@ -6,7 +6,8 @@
 
 @php $selected = old('tags', $product->tags?->pluck('id')->all() ?? []); @endphp
 <form method="POST" action="{{ $product->exists ? route('products.update', $product) : route('products.store') }}" class="card max-w-3xl space-y-5 p-6"
-      x-data="{ buy: {{ (float) old('buying_price', $product->buying_price ?? 0) }}, sell: {{ (float) old('selling_price', $product->selling_price ?? 0) }} }">
+      x-data="{ buy: {{ (float) old('buying_price', $product->buying_price ?? 0) }}, sell: {{ (float) old('selling_price', $product->selling_price ?? 0) }} }"
+      @barcode.window.prevent="$refs.sku.value = $event.detail.code; $refs.sku.focus(); ShopDevices.beep()">
     @csrf
     @if ($product->exists) @method('PUT') @endif
 
@@ -18,7 +19,7 @@
         </div>
         <div>
             <label class="label">{{ __('SKU / Barcode') }}</label>
-            <input name="sku" class="input" value="{{ old('sku', $product->sku) }}">
+            <input name="sku" x-ref="sku" class="input" value="{{ old('sku', $product->sku) }}" placeholder="{{ __('Scan or type') }}">
             @error('sku')<p class="error">{{ $message }}</p>@enderror
         </div>
     </div>

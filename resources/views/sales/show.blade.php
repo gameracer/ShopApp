@@ -4,7 +4,23 @@
 @section('content')
 <x-page-header :title="__('Receipt').' '.$sale->invoice_no">
     <x-slot:actions>
-        <button onclick="window.print()" class="btn-secondary"><x-icon name="print" class="h-4 w-4" /> {{ __('Print') }}</button>
+        {{-- Thermal receipt: silent print in the desktop app, print dialog in a browser. ?print=1 (auto-print) prints once on arrival. --}}
+        <div class="flex items-center gap-2" x-data="{
+                status: null,
+                async print() {
+                    this.status = { ok: true, text: @js(__('Printing…')) };
+                    const r = await ShopDevices.printReceipt(@js(route('sales.receipt', $sale)));
+                    this.status = !ShopDevices.desktop && r.ok ? null : r.ok
+                        ? { ok: true, text: @js(__('Printed')) + (r.printer ? ' · ' + r.printer : '') }
+                        : { ok: false, text: @js(__('Printing failed')) + (r.error ? ': ' + r.error : '') };
+                    if (this.status?.ok) setTimeout(() => this.status = null, 4000);
+                },
+             }"
+             x-init="if (new URLSearchParams(location.search).has('print')) { history.replaceState(null, '', location.pathname); print(); }">
+            <span x-cloak x-show="status" x-text="status?.text" :class="status?.ok ? 'text-emerald-700' : 'text-rose-700'" class="text-sm"></span>
+            <button type="button" @click="print()" class="btn-secondary"><x-icon name="print" class="h-4 w-4" /> {{ __('Print receipt') }}</button>
+            <button type="button" onclick="window.print()" class="btn-secondary" title="{{ __('Print this page on A4 paper') }}">A4</button>
+        </div>
         <a href="{{ route('sales.create') }}" class="btn-primary"><x-icon name="cart" class="h-4 w-4" /> {{ __('New sale') }}</a>
     </x-slot:actions>
 </x-page-header>
