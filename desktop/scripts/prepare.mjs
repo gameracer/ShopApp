@@ -61,9 +61,18 @@ export function phpEnv(phpRoot, scanDir) {
     return { ...process.env, PHPRC: phpRoot, PHP_INI_SCAN_DIR: scanDir };
 }
 
-async function preparePhp() {
-    const releases = await (await fetch('https://windows.php.net/downloads/releases/releases.json')).json();
-    const series = releases[PHP_SERIES];
+/** Newest PHP zip of our series already in .cache (it was checksum-verified when downloaded). */
+function cachedPhpZip() {
+    const pattern = new RegExp(`^php-${PHP_SERIES.replace('.', '\\.')}\\.(\\d+)(-\\d+)?-nts-Win32-vs\\d+-x64\\.zip$`);
+    const zips = fs.existsSync(cacheDir) ? fs.readdirSync(cacheDir).filter((f) => pattern.test(f)) : [];
+    zips.sort((a, b) => Number(b.match(pattern)[1]) - Number(a.match(pattern)[1]));
+    return zips[0] ? path.join(cacheDir, zips[0]) : null;
+}
+
+async function latestPhpZip() {
+    const res = await fetch('https://windows.php.net/downloads/releases/releases.json', { signal: AbortSignal.timeout(20000) });
+    if (!res.ok) throw new Error(`releases.json: HTTP ${res.status}`);
+    const series = (await res.json())[PHP_SERIES];
     if (!series) throw new Error(`PHP ${PHP_SERIES} not found on windows.php.net`);
     const key = Object.keys(series).find((k) => /^nts-vs\d+-x64$/.test(k));
     const { path: zipName, sha256: expected } = series[key].zip;
@@ -72,6 +81,19 @@ async function preparePhp() {
     if (expected && sha256(zip) !== expected.toLowerCase()) {
         fs.rmSync(zip);
         throw new Error(`Checksum mismatch for ${zipName}; deleted, run again.`);
+    }
+    return zip;
+}
+
+async function preparePhp() {
+    let zip;
+    try {
+        zip = await latestPhpZip();
+    } catch (e) {
+        // php.net unreachable (offline, timeout): build with the PHP we already have.
+        zip = cachedPhpZip();
+        if (!zip || /Checksum mismatch/.test(e.message)) throw e;
+        console.warn(`! Could not check for a newer PHP (${e.cause?.code ?? e.message}); using cached ${path.basename(zip)}`);
     }
 
     fs.rmSync(phpDir, { recursive: true, force: true });
