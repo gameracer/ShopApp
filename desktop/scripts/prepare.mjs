@@ -130,7 +130,7 @@ async function preparePhp() {
         '',
     ].join('\r\n'));
 
-    console.log(`PHP ${series.version} ready in build/php`);
+    console.log(`PHP ready in build/php (${path.basename(zip)})`);
 }
 
 async function prepareApp() {
