@@ -17,7 +17,8 @@ A shop management app built with **Laravel 13** and **Tailwind CSS 4** (with Alp
 | 9 | **Near-expiry alerts**: a bell badge, a dashboard panel and an *Alerts* page for expired and soon-to-expire items (the number of days is set in *Settings*), plus low stock and overdue credit | header bell, *Dashboard*, *Alerts* |
 
 Other details:
-- **Point of sale.** Use ↑/↓ and Enter to pick items or a barcode scanner, and the change due is worked out for cash sales. A sale can be paid by cash, mobile money, bank or credit, and has a printable receipt.
+- **Point of sale.** Use ↑/↓ and Enter to pick items or a barcode scanner, and the change due is worked out for cash sales. A sale can be paid by cash, mobile money, bank or credit, or **split** across cash, mobile and bank (change comes from the cash part, and anything left unpaid becomes credit). Every sale has a printable receipt. The customer is optional unless part of the bill is left unpaid.
+- **Seller panel.** Sellers log in to a home screen of big cards: **Sell**, **Restock**, **Credit customers**, **My sales**, **Customers**, **Products** and **Alerts**, with badges for low stock, debtors and alerts, and their sales today. A slim top bar (*Home*, *Sell*, *My sales*, *Credit buyers*, *Add stock*) replaces the sidebar. Products show as large tiles with category tabs; tap or scan to add. Pick the payment method, tap a cash amount, and press **Pay** (or **F9**). The till shows the change, prints the receipt if auto-print is on, and stays open for the next customer: tap *New sale*, press Enter, or just scan the next item. **F2** jumps to search. The customer field stays hidden unless part of the bill is left unpaid.
 - **Barcode scanner and receipt printer.** See [Hardware](#hardware-barcode-scanner--receipt-printer) below.
 - **Stock checks.** Stock goes down automatically on every sale. You cannot sell more than you have, and expired items cannot be sold.
 - **Deleting a sale (owner only)** puts its items back in stock.
@@ -103,7 +104,6 @@ npm run release -- patch     # bump version, commit, tag vX.Y.Z, build
 ```
 
 See **[desktop/BUILD.md](desktop/BUILD.md)** for the full procedure: setup, testing, versioning, publishing auto-updates, code signing and troubleshooting.
-
 ## Hardware: barcode scanner & receipt printer
 
 Both are plug and play, with no extra software in ShopApp.
@@ -117,23 +117,29 @@ Both are plug and play, with no extra software in ShopApp.
 | *New / Edit product* | The code goes into *SKU / Barcode*. |
 | Anywhere else | The product opens. If the code is unknown, the owner goes to *New product* with the code filled in. |
 
-A product's barcode is its **SKU / Barcode** field. You can switch off the scan beep in *Settings*, and *Settings → Devices on this computer* has a box for testing the scanner.
+A product's barcode is its **SKU / Barcode** field. Matching ignores letter case and leading zeros, so `012345678905`, `12345678905` and `0012345678905` find the same product.
+
+If a barcode doesn't work, scan it in *Settings → Devices on this computer → Barcode scanner*. It shows exactly what the scanner sent, how many characters, and which product (if any) it matches. Common causes:
+- The SKU saved on the product differs from the code on the pack. Fix the SKU on the product.
+- The barcode column was opened in Excel before a CSV import. Excel turns long codes into `6.00123E+12`, which can't be recovered. The import now refuses such rows: format the column as *Text*, retype the codes and import again.
+- The scanner's keyboard language differs from Windows' (letters or symbols come out wrong). Set the scanner to the same layout using its setup barcodes. You can switch off the scan beep in *Settings*, and *Settings → Devices on this computer* has a box for testing the scanner.
 
 **Thermal receipt printer** (58 mm or 80 mm, USB/LAN/Bluetooth, any brand with a Windows driver, e.g. Xprinter, Epson TM, Rongta). Plug it in, and install the maker's driver if Windows does not find one. Then:
 
 - *Settings → Receipt printer & barcode scanner* sets the paper width, a footer line, and **auto-print after every sale**.
 - *Print receipt* on a sale prints a receipt sized for the roll. *A4* prints the full page.
-- **Desktop app**: prints with no dialog. Under *Settings → Devices on this computer* you can leave the printer on *Automatic* (it finds a printer named like POS/receipt/thermal/XP-/TM-, otherwise uses the Windows default) or pick one. The choice is saved per computer in `%APPDATA%\ShopApp\devices.json`. Use *Print test receipt* to check the width.
+- **Desktop app**: prints with no dialog. The receipt is drawn at the printer's own resolution and sent straight to the printer in **ESC/POS**, the command language almost all 58/80 mm thermal printers understand. This skips the Windows driver, which on many cheap thermal printers prints blank paper when used silently. Under *Settings → Devices on this computer* you can leave the printer on *Automatic* (it finds a printer named like POS/receipt/thermal/XP-/TM-) or pick one, and switch the *Printing method* to the Windows driver for a printer that is not a thermal receipt printer. *Print with dialog* always uses the Windows driver. The choices are saved per computer in `%APPDATA%\ShopApp\devices.json`. *Print receipt* shows a preview first; auto-print after a sale prints straight away.
 - **Web browser**: the print window opens. Choose the receipt printer, set margins to *None*, and the browser remembers it.
-- **Cash drawer** (RJ11 into the printer): turn on the driver's *open cash drawer* option (in Xprinter/Epson drivers, under *Printing Preferences → Peripherals / Cash Drawer*). It opens on every receipt.
+- **Cash drawer** (RJ11 into the printer): in the desktop app, tick *Open the cash drawer with every receipt* under *Settings → Devices on this computer*. With the Windows driver methods, turn on the driver's own *open cash drawer* option instead (in Xprinter/Epson drivers, under *Printing Preferences → Peripherals / Cash Drawer*).
 
 **Dual-screen touch POS** (touch screen for the cashier, second screen facing the customer):
 
-- **Customer display.** As items are scanned or tapped, the customer sees each line, the total, the cash given and the change. After payment it shows *Thank you* with the change for 15 seconds, then a welcome screen with the shop name.
+- **Customer display.** Like a supermarket screen: the customer sees a numbered list of their items (quantity, price, amount), the last item scanned in large type, the number of items, the total to pay, the payment method (each part of a split payment), cash given and change or balance, plus the customer and cashier names. After payment it shows *Thank you* with the invoice number, the order and the change for 15 seconds, then a welcome screen with the shop name.
   - **Desktop app:** opens it full screen on the second screen automatically, and follows screens being plugged in or out. The display never takes keyboard focus, so the barcode scanner keeps typing into the till. Turn it off or pick a screen under *View → Customer display* (**Ctrl+Shift+D**) or *Settings → Devices on this computer*.
   - **Web browser:** *Customer display* on *New sale* opens it in a popup. Drag it to the second screen and press F11. The page is `/display`. It needs no login because it only shows what the till sends it.
 - **Desktop app shortcuts.** **F11**: full screen on/off. **Ctrl+Shift+D**: customer display on/off. **Ctrl+Shift+M**: show/hide the menu bar (when hidden, **Alt** shows it for a moment). These choices are remembered on each computer.
 - **Touch screens.** Larger buttons, inputs and list rows, quick cash buttons (*Exact*, then round amounts above the total), number pads for amounts, and no accidental double-tap or pinch zoom. With a mouse, the screens look the same as before.
+- **On-screen keyboard.** Tapping a field with a finger opens ShopApp's own keyboard: letters for text fields, a number pad for amounts and quantities. It types straight into the field, ↵ works like Enter, ⌄ closes it, and it closes when you tap elsewhere. Mouse clicks and the barcode scanner never open it. Turn it off per computer in *Settings → Devices on this computer*. ShopApp has its own keyboard because Windows doesn't open its touch keyboard while any keyboard is attached, and a USB scanner counts as one.
 
 ## Development
 

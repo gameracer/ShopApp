@@ -215,6 +215,11 @@ class ProductImporter
             return [null, $validator->errors()->first()];
         }
 
+        // Excel turns long barcodes into 6.00123E+12, losing digits for good: such a code can never scan.
+        if ($input['sku'] !== null && preg_match('/^\d+([.,]\d+)?e\+?\d+$/i', $input['sku'])) {
+            return [null, __('The barcode :code was damaged by Excel. Format the barcode column as Text, retype the codes and save again.', ['code' => $input['sku']])];
+        }
+
         $expiry = null;
         if (($row['expiry_date'] ?? '') !== '') {
             $expiry = $this->parseDate($row['expiry_date']);

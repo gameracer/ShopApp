@@ -29,6 +29,30 @@ class AuthAndRolesTest extends TestCase
         $this->assertGuest();
     }
 
+    public function test_seller_starts_on_the_till_panel_with_few_options(): void
+    {
+        $seller = User::factory()->seller()->create(['email' => 'till@shop.test']);
+
+        $this->post('/login', ['email' => 'till@shop.test', 'password' => 'password'])->assertRedirect('/');
+
+        // Home is a launcher of big cards.
+        $this->actingAs($seller)->get('/')->assertOk()
+            ->assertSee('home-card', false)
+            ->assertSee(route('sales.create'), false)
+            ->assertSee(route('stock.create'), false)
+            ->assertSee(route('credit.index'), false)
+            ->assertDontSee(__('Profit today'));
+
+        $this->actingAs($seller)->get('/sales/new')->assertOk()
+            ->assertSee('panel-tab', false)
+            ->assertSee(route('credit.index'), false)
+            ->assertDontSee('nav-link', false)
+            ->assertDontSee(route('expenses.index'), false);
+
+        $owner = User::factory()->owner()->create();
+        $this->actingAs($owner)->get('/sales/new')->assertOk()->assertSee('nav-link', false)->assertDontSee('panel-tab', false);
+    }
+
     public function test_inactive_user_cannot_log_in(): void
     {
         User::factory()->create(['email' => 'off@shop.test', 'is_active' => false]);

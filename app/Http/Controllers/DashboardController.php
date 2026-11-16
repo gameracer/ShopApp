@@ -32,6 +32,15 @@ class DashboardController extends Controller
             'stock_value' => (float) Product::where('quantity', '>', 0)->selectRaw('SUM(quantity * buying_price) as v')->value('v'),
         ];
 
+        // Sellers get a launcher of big cards instead of the owner's figures.
+        if ($user->isSeller()) {
+            return view('seller-home', [
+                'stats' => $stats,
+                'lowStock' => Product::lowStock()->count(),
+                'debtors' => Customer::withBalance()->get()->filter(fn ($c) => $c->balance > 0)->count(),
+            ]);
+        }
+
         return view('dashboard', [
             'stats' => $stats,
             'nearExpiry' => Product::nearExpiry()->orderBy('expiry_date')->limit(8)->get(),

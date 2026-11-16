@@ -1,6 +1,7 @@
 import Alpine from 'alpinejs';
 import { startScanner } from './devices';
 import { customerDisplay } from './display';
+import { startKeyboard } from './keyboard';
 import { posApp, stockApp } from './shop';
 
 window.Alpine = Alpine;
@@ -10,4 +11,5 @@ Alpine.data('stockApp', stockApp);
 Alpine.data('customerDisplay', customerDisplay);
 
 startScanner();
+startKeyboard();
 Alpine.start();

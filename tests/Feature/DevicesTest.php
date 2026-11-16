@@ -31,6 +31,45 @@ class DevicesTest extends TestCase
             ->assertJsonStructure(['message']);
     }
 
+    public function test_scan_tolerates_letter_case_and_leading_zeros(): void
+    {
+        $seller = User::factory()->seller()->create();
+        $upc = Product::factory()->create(['sku' => '012345678905']);     // UPC-A as printed
+        $excel = Product::factory()->create(['sku' => '4006381333931']);  // fine as is
+        $dropped = Product::factory()->create(['sku' => '76222004']);      // Excel dropped the leading 0
+        $code39 = Product::factory()->create(['sku' => 'abc-123']);
+
+        $find = fn (string $code) => $this->actingAs($seller)->getJson('/products/barcode?code='.urlencode($code))->assertOk()->json('id');
+
+        $this->assertSame($upc->id, $find('0012345678905'), 'EAN-13 form of a UPC-A code');
+        $this->assertSame($upc->id, $find('12345678905'), 'scanner that drops the leading zero');
+        $this->assertSame($excel->id, $find('4006381333931'));
+        $this->assertSame($dropped->id, $find('076222004'));
+        $this->assertSame($code39->id, $find('ABC-123'));
+        $this->actingAs($seller)->getJson('/products/barcode?code=12345')->assertNotFound();
+    }
+
+    public function test_exact_barcode_beats_a_leading_zero_variant(): void
+    {
+        $seller = User::factory()->seller()->create();
+        Product::factory()->create(['sku' => '0123456']);
+        $exact = Product::factory()->create(['sku' => '123456']);
+
+        $this->actingAs($seller)->getJson('/products/barcode?code=123456')->assertOk()->assertJson(['id' => $exact->id]);
+    }
+
+    public function test_import_rejects_barcodes_damaged_by_excel(): void
+    {
+        $owner = User::factory()->owner()->create();
+        $csv = "name,sku,buying_price,selling_price\nSoda,6.00123E+12,800,1000\nJuice,6001234567890,900,1200\n";
+        $file = \Illuminate\Http\UploadedFile::fake()->createWithContent('products.csv', $csv);
+
+        $this->actingAs($owner)->post('/products/import', ['file' => $file]);
+
+        $this->assertDatabaseMissing('products', ['name' => 'Soda']);
+        $this->assertDatabaseHas('products', ['name' => 'Juice', 'sku' => '6001234567890']);
+    }
+
     public function test_expired_products_are_flagged_on_scan(): void
     {
         $seller = User::factory()->seller()->create();
@@ -114,7 +153,7 @@ class DevicesTest extends TestCase
         $sale = $this->sell($owner);
 
         $this->actingAs($owner)->get(route('sales.show', $sale))->assertOk()->assertSee('sales\/'.$sale->id.'\/receipt', false);
-        $this->actingAs($owner)->get('/settings')->assertOk()->assertSee('receipt_width', false);
+        $this->actingAs($owner)->get('/settings')->assertOk()->assertSee('receipt_width', false)->assertSee('ShopKeyboard.setPref', false);
         $this->actingAs($owner)->get('/sales/new')->assertOk()->assertSee('onScan', false);
         $this->actingAs($owner)->get('/stock/add')->assertOk()->assertSee('onScan', false);
         $this->actingAs($owner)->get('/')->assertOk()->assertSee('name="shop-devices"', false);
@@ -124,7 +163,26 @@ class DevicesTest extends TestCase
     {
         Setting::put(['shop_name' => 'Duka la Mama']);
 
-        $this->get('/display')->assertOk()->assertSee('Duka la Mama')->assertSee('customerDisplay', false);
+        $this->get('/display')->assertOk()->assertSee('Duka la Mama')->assertSee('customerDisplay', false)
+            ->assertSee('Your order')->assertSee('Last item')->assertSee('lastLine', false);
+    }
+
+    public function test_till_sends_order_details_for_the_customer_display(): void
+    {
+        $seller = User::factory()->seller()->create(['name' => 'Asha']);
+        $product = Product::factory()->create(['quantity' => 5]);
+
+        $this->actingAs($seller)->get('/sales/new')->assertOk()->assertSee('\u0022cashier\u0022:\u0022Asha\u0022', false);
+
+        $sale = $this->actingAs($seller)->postJson('/sales', [
+            'items' => [['product_id' => $product->id, 'quantity' => 1]], 'payment_method' => 'cash',
+        ])->assertOk()->json();
+        $this->assertSame(Sale::findOrFail($sale['id'])->invoice_no, $sale['invoice_no']);
+
+        // The till stays open and prints the receipt itself.
+        $this->assertSame(route('sales.receipt', $sale['id']), $sale['receipt_url']);
+        $this->assertFalse($sale['auto_print']);
+        $this->actingAs($seller)->get('/sales')->assertDontSee(__('Sale completed.'));
     }
 
     public function test_till_mirrors_the_cart_to_the_customer_display(): void

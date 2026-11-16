@@ -4,12 +4,13 @@ copyright: Copyright © ShopApp
 
 directories:
   output: dist
-  # Put icon.ico (256x256) here to replace the default Electron icon.
+  # icon.ico (16-256 px; logo-only art at small sizes) is the app, installer and taskbar icon.
   buildResources: resources
 
 files:
   - main.js
   - preload.js
+  - escpos.js
   - splash.html
   - package.json
 

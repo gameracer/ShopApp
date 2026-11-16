@@ -47,7 +47,7 @@ class ProductController extends Controller
             ->when($request->boolean('in_stock'), fn ($q) => $q->where('quantity', '>', 0)
                 ->where(fn ($e) => $e->whereNull('expiry_date')->orWhereDate('expiry_date', '>=', today()->toDateString())))
             ->orderBy('name')
-            ->limit(30)
+            ->limit(min(100, max(1, $request->integer('limit', 30))))
             ->get();
 
         return response()->json($products->map(fn (Product $p) => $this->payload($p, $isOwner)));
@@ -61,7 +61,7 @@ class ProductController extends Controller
     public function barcode(Request $request)
     {
         $code = trim((string) $request->query('code'));
-        $product = $code === '' ? null : Product::with('tags:id,name,color')->where('sku', $code)->first();
+        $product = Product::findByBarcode($code)?->load('tags:id,name,color');
 
         if ($request->expectsJson()) {
             return $product

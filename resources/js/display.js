@@ -6,8 +6,9 @@
  * browser popup dragged to the second monitor. No server round trips.
  *
  * Messages from the till:
- *   { type: 'cart', lines: [{ name, quantity, unit, price, subtotal }], total, method, cashGiven, change }
- *   { type: 'paid', total, paid, change, balance }
+ *   { type: 'cart', lines: [{ name, quantity, unit, price, subtotal }], last, total, units, method, methodLabel,
+ *     customer, cashier, cashGiven, change, amountPaid, balance }
+ *   { type: 'paid', ...the same order fields, invoice, paid, change, balance }
  * From the display:
  *   { type: 'hello' }  -> the till answers with its current cart
  */
@@ -26,7 +27,7 @@ export function displayChannel() {
 export function customerDisplay(config) {
     return {
         state: 'idle', // idle | cart | paid
-        cart: { lines: [], total: 0 },
+        cart: { lines: [], total: 0, last: -1 },
         paid: null,
         now: new Date(),
         _timer: null,
@@ -46,14 +47,14 @@ export function customerDisplay(config) {
                 if (!data.lines.length && this.state === 'paid') return;
                 this.cart = data;
                 this.state = data.lines.length ? 'cart' : 'idle';
-                this.$nextTick(() => this.$refs.lines?.lastElementChild?.scrollIntoView({ block: 'end' }));
+                this.$nextTick(() => this.$refs.lines?.querySelector('[data-last]')?.scrollIntoView({ block: 'nearest' }));
             } else if (data?.type === 'paid') {
                 this.paid = data;
                 this.state = 'paid';
                 clearTimeout(this._timer);
                 this._timer = setTimeout(() => {
                     this.state = 'idle';
-                    this.cart = { lines: [], total: 0 };
+                    this.cart = { lines: [], total: 0, last: -1 };
                 }, THANK_YOU_MS);
             }
         },
@@ -67,6 +68,20 @@ export function customerDisplay(config) {
 
         qty(value) {
             return Number(value).toLocaleString(undefined, { maximumFractionDigits: 2 });
+        },
+
+        /** The item just scanned or tapped. */
+        get lastLine() {
+            return this.cart.lines[this.cart.last] ?? null;
+        },
+
+        /** Lines and details shown on the left: the open cart, or the order just paid. */
+        get order() {
+            return this.state === 'paid' && this.paid?.lines ? this.paid : this.cart;
+        },
+
+        get date() {
+            return this.now.toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
         },
 
         get clock() {

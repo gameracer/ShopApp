@@ -13,6 +13,7 @@
 
 const { app, BrowserWindow, Menu, dialog, ipcMain, screen, shell } = require('electron');
 const { autoUpdater } = require('electron-updater');
+const escpos = require('./escpos');
 const { spawn, execFile } = require('node:child_process');
 const crypto = require('node:crypto');
 const fs = require('node:fs');
@@ -217,36 +218,81 @@ function resolvePrinter(printers) {
     const { printer } = readDevices();
     return printers.find((p) => p.name === printer)
         ?? printers.find((p) => RECEIPT_PRINTER.test(`${p.name} ${p.displayName}`) && !VIRTUAL_PRINTER.test(p.name))
-        ?? printers.find((p) => p.isDefault)
+        ?? printers.find((p) => p.isDefault && !VIRTUAL_PRINTER.test(p.name))
         ?? null;
 }
 
-async function printReceipt(url) {
+/**
+ * How silent receipts are printed:
+ * 'escpos' (default): drawn as a picture and sent straight to the printer in ESC/POS (desktop/escpos.js).
+ * 'driver': through the Windows driver with the paper size from the printer's settings.
+ * 'fit': through the Windows driver with a page cut to the length of the receipt.
+ */
+const PRINT_MODES = ['escpos', 'driver', 'fit'];
+
+function printMode() {
+    const { printMode: mode } = readDevices();
+    return PRINT_MODES.includes(mode) ? mode : 'escpos';
+}
+
+async function printReceipt(url, { dialog = false, sender = null } = {}) {
     if (!isInternal(url)) throw new Error('Only ShopApp pages can be printed.');
 
+    if (!dialog && printMode() === 'escpos') {
+        try {
+            const printer = resolvePrinter(await listPrinters(sender ?? mainWindow.webContents));
+            if (!printer) {
+                throw new Error('No receipt printer found. Plug in the printer, install its driver, then choose it under Settings → Devices on this computer.');
+            }
+            const result = await escpos.printEscpos(url, printer.name, {
+                cashDrawer: readDevices().cashDrawer === true,
+                documentName: 'ShopApp receipt',
+            });
+            log('Receipt printed (ESC/POS) on', printer.name, JSON.stringify(result), url);
+            return { ok: true, printer: printer.displayName };
+        } catch (e) {
+            log('Receipt print (ESC/POS) failed:', e.message);
+            return { ok: false, error: e.message };
+        }
+    }
+
     const win = new BrowserWindow({
-        show: false, width: 420, height: 900,
-        webPreferences: { contextIsolation: true, sandbox: true, nodeIntegration: false },
+        // Hidden, but still painted: an unpainted window prints blank paper.
+        show: false, width: 420, height: 200, paintWhenInitiallyHidden: true,
+        webPreferences: { contextIsolation: true, sandbox: true, nodeIntegration: false, backgroundThrottling: false },
     });
     try {
         await win.loadURL(url);
-        const page = await win.webContents.executeJavaScript(
-            '({ paper: document.body?.dataset.paper, height: document.documentElement.scrollHeight })');
+        // Wait for fonts and layout before measuring and printing.
+        const page = await win.webContents.executeJavaScript(`
+            (document.fonts ? document.fonts.ready : Promise.resolve())
+                .then(() => new Promise((r) => setTimeout(r, 250)))
+                .then(() => ({ paper: document.body?.dataset.paper, height: Math.ceil(document.body.getBoundingClientRect().bottom) }))`);
         if (!page.paper) throw new Error('The receipt could not be opened.');
 
         const printer = resolvePrinter(await listPrinters(win.webContents));
-        // Thermal paper is a roll: make the page exactly as long as the receipt (px -> microns, +5 mm).
-        const pageSize = {
-            width: (page.paper === '58' ? 58 : 80) * 1000,
-            height: Math.max(20000, Math.ceil((page.height * 25400) / 96) + 5000),
+        if (!printer && !dialog) {
+            throw new Error('No receipt printer found. Plug in the printer, install its driver, then choose it under Settings → Devices on this computer.');
+        }
+        const mode = printMode();
+        const options = {
+            silent: !dialog, printBackground: true, deviceName: printer?.name,
+            margins: { marginType: 'none' },
         };
+        if (mode === 'fit') {
+            // Thermal paper is a roll: make the page exactly as long as the receipt (px -> microns, +5 mm).
+            // Width is the printable width, not the roll: thermal drivers only accept their own width
+            // (72 mm on 80 mm rolls, 48 mm on 58 mm) and print blank paper for anything else.
+            options.pageSize = {
+                width: (page.paper === '58' ? 48 : 72) * 1000,
+                height: Math.max(50000, Math.ceil((page.height * 25400) / 96) + 5000),
+            };
+        }
+        log('Printing receipt', JSON.stringify({ printer: printer?.name, mode, dialog, height: page.height, pageSize: options.pageSize }));
         await new Promise((resolve, reject) => {
-            win.webContents.print({
-                silent: true, printBackground: true, deviceName: printer?.name,
-                margins: { marginType: 'none' }, pageSize,
-            }, (ok, reason) => (ok ? resolve() : reject(new Error(reason || 'Printing failed.'))));
+            win.webContents.print(options, (ok, reason) => (ok ? resolve() : reject(new Error(reason || 'Printing failed.'))));
         });
-        log('Receipt printed on', printer?.name ?? 'default printer', url);
+        log('Receipt printed on', printer?.name ?? 'chosen printer', url);
         return { ok: true, printer: printer?.displayName ?? null };
     } catch (e) {
         log('Receipt print failed:', e.message);
@@ -267,16 +313,28 @@ function setupDeviceIpc() {
             printers,
             selected: printers.some((p) => p.name === selected) ? selected : null,
             detected: resolvePrinter(printers)?.displayName ?? null,
+            mode: printMode(),
+            cashDrawer: readDevices().cashDrawer === true,
         };
+    });
+    ipcMain.handle('devices:set-print-mode', (event, mode) => {
+        if (!fromApp(event)) throw new Error('Not allowed.');
+        writeDevices({ printMode: PRINT_MODES.includes(mode) ? mode : 'escpos' });
+        return true;
+    });
+    ipcMain.handle('devices:set-cash-drawer', (event, on) => {
+        if (!fromApp(event)) throw new Error('Not allowed.');
+        writeDevices({ cashDrawer: on === true });
+        return true;
     });
     ipcMain.handle('devices:set-printer', (event, name) => {
         if (!fromApp(event)) throw new Error('Not allowed.');
         writeDevices({ printer: typeof name === 'string' && name ? name : null });
         return true;
     });
-    ipcMain.handle('devices:print-receipt', (event, url) => {
+    ipcMain.handle('devices:print-receipt', (event, url, options) => {
         if (!fromApp(event)) throw new Error('Not allowed.');
-        return printReceipt(String(url));
+        return printReceipt(String(url), { dialog: Boolean(options?.dialog), sender: event.sender });
     });
     ipcMain.handle('devices:displays', (event) => {
         if (!fromApp(event)) throw new Error('Not allowed.');
@@ -543,6 +601,11 @@ function createMainWindow() {
     applyMenuBar();
     // Touch screens: no accidental pinch zoom (Ctrl +/- in the View menu still works).
     mainWindow.webContents.setVisualZoomLevelLimits(1, 1).catch(() => {});
+    // Test builds zoomed receipts with setZoomFactor, which Chromium saved for the whole site
+    // and so enlarged the till. Undo that leftover; ordinary Ctrl +/- zoom stays below 2x.
+    mainWindow.webContents.on('did-finish-load', () => {
+        if (mainWindow?.webContents.getZoomFactor() >= 2) mainWindow.webContents.setZoomFactor(1);
+    });
     mainWindow.on('closed', () => {
         mainWindow = null;
         customerWindow?.destroy();

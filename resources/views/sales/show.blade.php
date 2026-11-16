@@ -4,19 +4,22 @@
 @section('content')
 <x-page-header :title="__('Receipt').' '.$sale->invoice_no">
     <x-slot:actions>
-        {{-- Thermal receipt: silent print in the desktop app, print dialog in a browser. ?print=1 (auto-print) prints once on arrival. --}}
+        {{-- Thermal receipt: preview first, then silent print in the desktop app or the print dialog in a browser.
+             ?print=1 (auto-print after a sale) prints once on arrival, without the preview. --}}
         <div class="flex items-center gap-2" x-data="{
                 status: null,
-                async print() {
-                    this.status = { ok: true, text: @js(__('Printing…')) };
-                    const r = await ShopDevices.printReceipt(@js(route('sales.receipt', $sale)));
+                async print(preview = true) {
+                    const url = @js(route('sales.receipt', $sale));
+                    if (!preview) this.status = { ok: true, text: @js(__('Printing…')) };
+                    const r = preview ? await ShopDevices.previewReceipt(url) : await ShopDevices.printReceipt(url);
+                    if (!r) return; // preview closed without printing
                     this.status = !ShopDevices.desktop && r.ok ? null : r.ok
                         ? { ok: true, text: @js(__('Printed')) + (r.printer ? ' · ' + r.printer : '') }
                         : { ok: false, text: @js(__('Printing failed')) + (r.error ? ': ' + r.error : '') };
                     if (this.status?.ok) setTimeout(() => this.status = null, 4000);
                 },
              }"
-             x-init="if (new URLSearchParams(location.search).has('print')) { history.replaceState(null, '', location.pathname); print(); }">
+             x-init="if (new URLSearchParams(location.search).has('print')) { history.replaceState(null, '', location.pathname); print(false); }">
             <span x-cloak x-show="status" x-text="status?.text" :class="status?.ok ? 'text-emerald-700' : 'text-rose-700'" class="text-sm"></span>
             <button type="button" @click="print()" class="btn-secondary"><x-icon name="print" class="h-4 w-4" /> {{ __('Print receipt') }}</button>
             <button type="button" onclick="window.print()" class="btn-secondary" title="{{ __('Print this page on A4 paper') }}">A4</button>
@@ -52,7 +55,13 @@
             </tbody>
             <tfoot class="text-sm">
                 <tr><td colspan="3" class="px-3 pt-3 text-right font-semibold">{{ __('Total') }}</td><td class="px-3 pt-3 text-right text-lg font-bold">{{ money($sale->total) }}</td></tr>
-                <tr><td colspan="3" class="px-3 text-right text-slate-500">{{ __('Paid') }} ({{ __(ucfirst($sale->payment_method)) }})</td><td class="px-3 text-right">{{ money($sale->amount_paid) }}</td></tr>
+                @if ($sale->payment_method === 'split')
+                    @foreach ($sale->payments as $payment)
+                        <tr><td colspan="3" class="px-3 text-right text-slate-500">{{ __('Paid') }} ({{ __(ucfirst($payment->method)) }})</td><td class="px-3 text-right">{{ money($payment->amount) }}</td></tr>
+                    @endforeach
+                @else
+                    <tr><td colspan="3" class="px-3 text-right text-slate-500">{{ __('Paid') }} ({{ __(ucfirst($sale->payment_method)) }})</td><td class="px-3 text-right">{{ money($sale->amount_paid) }}</td></tr>
+                @endif
                 @if ($sale->balance() > 0)
                     <tr><td colspan="3" class="px-3 text-right font-semibold text-rose-700">{{ __('Balance') }}</td><td class="px-3 text-right font-semibold text-rose-700">{{ money($sale->balance()) }}</td></tr>
                     @if ($sale->due_date)<tr><td colspan="3" class="px-3 text-right text-slate-500">{{ __('Due date') }}</td><td class="px-3 text-right">{{ $sale->due_date->format('d/m/Y') }}</td></tr>@endif

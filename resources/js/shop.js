@@ -46,6 +46,7 @@ function productSearch(config) {
             const params = new URLSearchParams({ q: this.query });
             this.selectedTags.forEach((t) => params.append('tags[]', t));
             if (config.inStockOnly) params.append('in_stock', '1');
+            if (config.limit) params.append('limit', config.limit);
 
             try {
                 const res = await fetch(`${config.searchUrl}?${params}`, {
@@ -66,6 +67,26 @@ function productSearch(config) {
         pickHighlighted() {
             const p = this.results[this.highlighted];
             if (p) this.add(p);
+        },
+
+        /**
+         * Enter in the search box. A code that slipped past scan detection (unusual scanner
+         * settings) still works: try it as a barcode before picking from the results.
+         */
+        async enterPressed() {
+            const q = this.query.trim();
+            if (q.length >= 3 && !/\s/.test(q)) {
+                const product = await lookupBarcode(q).catch(() => null);
+                if (product) {
+                    this.query = '';
+                    const error = this.acceptScan(product);
+                    return error ? this.notify(false, error) : this.notify(true, product.name);
+                }
+            }
+            // Results may lag behind the typing (debounced search): refresh before picking.
+            clearTimeout(this._timer);
+            await this.search();
+            this.pickHighlighted();
         },
 
         async onScan(event) {
@@ -138,7 +159,7 @@ export function posApp(config) {
     // Kept outside the reactive object: native objects break behind Alpine's proxy.
     const display = displayChannel();
 
-    return compose(productSearch({ ...config, inStockOnly: true }), {
+    return compose(productSearch({ ...config, inStockOnly: true, limit: 60 }), {
         cart: [],
         paymentMethod: 'cash',
         amountPaid: '',
@@ -147,6 +168,12 @@ export function posApp(config) {
         newCustomerPhone: '',
         dueDate: '',
         cashGiven: '',
+        split: { cash: '', mobile: '', bank: '' },
+        lastId: null, // most recently added item, highlighted on the customer display
+        showCustomer: false,
+        today: { count: 0, total: 0, ...(config.today ?? {}) },
+        done: null, // the sale just completed: { invoice, total, change, balance, methodLabel, receiptUrl, showUrl }
+        printStatus: null,
 
         init() {
             this.search();
@@ -156,8 +183,22 @@ export function posApp(config) {
 
         /** Mirror the cart on the customer display. Re-runs on every change via x-effect. */
         broadcast() {
+            const last = this.cart.findIndex((l) => l.product_id === this.lastId);
             display?.postMessage({
                 type: 'cart',
+                ...this.order(),
+                last: last === -1 ? this.cart.length - 1 : last,
+                cashGiven: Number(this.cashGiven || 0),
+                change: this.change,
+                amountPaid: this.isCredit ? Number(this.amountPaid || 0) : this.isSplit ? this.splitPaid : null,
+                balance: this.isCredit ? this.balanceDue : this.isSplit ? this.splitRemaining : 0,
+                splitChange: this.isSplit ? this.splitChange : 0,
+            });
+        },
+
+        /** Order details shared by the display's cart and paid screens. */
+        order() {
+            return {
                 lines: this.cart.map((l) => ({
                     name: l.name,
                     unit: l.unit,
@@ -166,10 +207,13 @@ export function posApp(config) {
                     subtotal: Number(l.unit_price) * Number(l.quantity),
                 })),
                 total: this.total,
+                units: this.units,
                 method: this.paymentMethod,
-                cashGiven: Number(this.cashGiven || 0),
-                change: this.change,
-            });
+                methodLabel: config.methods?.[this.paymentMethod] ?? this.paymentMethod,
+                customer: (this.customerId ? config.customers?.[this.customerId] : this.newCustomerName.trim()) || null,
+                cashier: config.cashier ?? null,
+                payments: this.isSplit ? this.splitRows().map((p) => ({ label: config.methods?.[p.method] ?? p.method, amount: p.amount })) : [],
+            };
         },
 
         /** One-tap cash amounts: exact, then the next round notes above the total. */
@@ -183,7 +227,70 @@ export function posApp(config) {
             return [...new Set([total, ...rounds])].slice(0, 5);
         },
 
+        /** One category at a time, like a till's category tabs; null shows everything. */
+        pickTag(id) {
+            this.selectedTags = id === null || this.selectedTags.includes(id) ? [] : [id];
+            this.search();
+        },
+
+        /** Quantity of a product already in the cart (0 when not). */
+        inCart(product) {
+            return this.cart.find((l) => l.product_id === product.id)?.quantity ?? 0;
+        },
+
+        qty(value) {
+            return Number(value || 0).toLocaleString(undefined, { maximumFractionDigits: 2 });
+        },
+
+        get units() {
+            return this.cart.reduce((sum, l) => sum + Number(l.quantity), 0);
+        },
+
+        /** Cash typed in but not enough to cover the bill. */
+        get cashShort() {
+            const given = Number(this.cashGiven || 0);
+            return this.paymentMethod === 'cash' && given > 0 ? Math.max(0, this.total - given) : 0;
+        },
+
+        clearCart() {
+            this.cart = [];
+            this.cashGiven = '';
+            this.split = { cash: '', mobile: '', bank: '' };
+        },
+
+        /** Ready for the next customer. */
+        newSale() {
+            this.done = null;
+            this.printStatus = null;
+            this.clearCart();
+            this.paymentMethod = 'cash';
+            this.amountPaid = '';
+            this.customerId = '';
+            this.newCustomerName = '';
+            this.newCustomerPhone = '';
+            this.dueDate = '';
+            this.showCustomer = false;
+            this.lastId = null;
+            this.errors = {};
+            this.$nextTick(() => this.$refs.search?.focus());
+        },
+
+        async printDone(preview = true) {
+            if (!this.done) return;
+            const url = this.done.receiptUrl;
+            if (!preview) this.printStatus = { ok: true, text: config.i18n.printing };
+            const r = preview ? await window.ShopDevices.previewReceipt(url) : await window.ShopDevices.printReceipt(url);
+            if (!r || !this.done) return;
+            this.printStatus = !window.ShopDevices.desktop && r.ok ? null : r.ok
+                ? { ok: true, text: config.i18n.printed + (r.printer ? ' · ' + r.printer : '') }
+                : { ok: false, text: config.i18n.printFailed + (r.error ? ': ' + r.error : '') };
+            this.$nextTick(() => this.$refs.next?.focus());
+        },
+
         add(product) {
+            // Scanning or tapping while the last sale is still on screen starts the next one.
+            if (this.done) this.newSale();
+            this.lastId = product.id;
             const line = this.cart.find((l) => l.product_id === product.id);
             if (line) {
                 if (line.quantity < product.quantity) line.quantity++;
@@ -236,8 +343,45 @@ export function posApp(config) {
             return Math.max(0, this.total - Number(this.amountPaid || 0));
         },
 
+        get isSplit() {
+            return this.paymentMethod === 'split';
+        },
+
+        /** Split amounts that were filled in. */
+        splitRows() {
+            return Object.entries(this.split)
+                .map(([method, amount]) => ({ method, amount: Number(amount || 0) }))
+                .filter((p) => p.amount > 0);
+        },
+
+        get splitPaid() {
+            return this.splitRows().reduce((sum, p) => sum + p.amount, 0);
+        },
+
+        get splitRemaining() {
+            return Math.max(0, Math.round((this.total - this.splitPaid) * 100) / 100);
+        },
+
+        get splitChange() {
+            return Math.max(0, Math.round((this.splitPaid - this.total) * 100) / 100);
+        },
+
+        /** Put whatever is still unpaid on one method. */
+        fillSplit(method) {
+            this.split[method] = Number(this.split[method] || 0) + this.splitRemaining;
+        },
+
+        /** Part of the bill is left unpaid, so a customer is required. */
+        get owes() {
+            return (this.isCredit && this.balanceDue > 0) || (this.isSplit && this.splitRemaining > 0);
+        },
+
         async checkout() {
-            if (!this.cart.length) return;
+            if (!this.cart.length || this.submitting || this.done) return;
+            if (this.cashShort > 0) {
+                this.errors = { cash: [config.i18n.cashShort] };
+                return;
+            }
             const data = await this.post(config.storeUrl, {
                 items: this.cart.map((l) => ({
                     product_id: l.product_id,
@@ -246,21 +390,32 @@ export function posApp(config) {
                 })),
                 payment_method: this.paymentMethod,
                 amount_paid: this.isCredit ? this.amountPaid || 0 : null,
+                ...(this.isSplit ? { payments: this.splitRows() } : {}),
                 customer_id: this.customerId || null,
                 new_customer_name: this.customerId ? null : this.newCustomerName || null,
                 new_customer_phone: this.customerId ? null : this.newCustomerPhone || null,
-                due_date: this.isCredit ? this.dueDate || null : null,
+                due_date: this.owes ? this.dueDate || null : null,
             });
-            if (data && data.redirect) {
-                display?.postMessage({
-                    type: 'paid',
-                    total: this.total,
-                    paid: this.isCredit ? Number(this.amountPaid || 0) : Math.max(this.total, Number(this.cashGiven || 0)),
-                    change: this.paymentMethod === 'cash' ? this.change : 0,
-                    balance: this.isCredit ? this.balanceDue : 0,
-                });
-                window.location = data.redirect;
-            }
+            if (!data?.redirect) return;
+
+            const paid = {
+                ...this.order(),
+                invoice: data.invoice_no ?? null,
+                paid: this.isCredit ? Number(this.amountPaid || 0) : this.isSplit ? this.splitPaid : Math.max(this.total, Number(this.cashGiven || 0)),
+                change: this.paymentMethod === 'cash' ? this.change : this.isSplit ? this.splitChange : 0,
+                balance: this.isCredit ? this.balanceDue : this.isSplit ? this.splitRemaining : 0,
+            };
+            display?.postMessage({ type: 'paid', ...paid });
+
+            // Older server without the till links: open the sale page as before.
+            if (!data.receipt_url) return void (window.location = data.redirect);
+
+            this.today = { count: this.today.count + 1, total: this.today.total + paid.total };
+            this.done = { ...paid, receiptUrl: data.receipt_url, showUrl: data.show_url };
+            this.clearCart();
+            this.search(); // fresh stock counts on the tiles
+            this.$nextTick(() => this.$refs.next?.focus());
+            if (data.auto_print) this.printDone(false);
         },
     });
 }

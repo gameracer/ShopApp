@@ -9,7 +9,10 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Sale extends Model
 {
-    public const METHODS = ['cash', 'mobile', 'bank', 'credit'];
+    public const METHODS = ['cash', 'mobile', 'bank', 'credit', 'split'];
+
+    /** Methods a split payment can combine; anything left unpaid becomes credit. */
+    public const SPLIT_METHODS = ['cash', 'mobile', 'bank'];
 
     protected $fillable = [
         'invoice_no', 'user_id', 'customer_id', 'payment_method',

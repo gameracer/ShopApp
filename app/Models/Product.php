@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\DB;
 
 class Product extends Model
 {
@@ -65,6 +66,33 @@ class Product extends Model
             ->when($ignoreId, fn (Builder $q) => $q->whereKeyNot($ignoreId))
             ->pluck('name')
             ->contains(fn ($existing) => static::normalizeName($existing) === $normalized);
+    }
+
+    /**
+     * Find the product for a scanned barcode. Tolerates what scanners and spreadsheets do
+     * to codes: letter case, and leading zeros (UPC-A 12 digits vs EAN-13 "0…" vs GTIN-14
+     * "00…", or zeros Excel dropped). An exact match always wins.
+     */
+    public static function findByBarcode(string $code): ?self
+    {
+        $code = mb_strtolower(trim($code));
+        if ($code === '') {
+            return null;
+        }
+
+        $candidates = [$code];
+        if (ctype_digit($code)) {
+            $bare = ltrim($code, '0');
+            if ($bare !== '') {
+                array_push($candidates, $bare, '0'.$bare, '00'.$bare);
+            }
+        }
+        $candidates = array_values(array_unique($candidates));
+
+        $matches = static::query()->whereIn(DB::raw('lower(sku)'), $candidates)->get();
+
+        return $matches->first(fn (self $p) => mb_strtolower($p->sku) === $code)
+            ?? $matches->sortBy(fn (self $p) => array_search(mb_strtolower($p->sku), $candidates, true))->first();
     }
 
     /**

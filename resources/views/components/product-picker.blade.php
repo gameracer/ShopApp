@@ -4,7 +4,7 @@
     <div class="space-y-3 border-b border-slate-100 p-4">
         <div class="relative">
             <x-icon name="search" class="pointer-events-none absolute top-2.5 left-3 h-4 w-4 text-slate-400" />
-            <input x-ref="search" x-model="query" @input="onQuery" @keydown.arrow-down.prevent="move(1)" @keydown.arrow-up.prevent="move(-1)" @keydown.enter.prevent="pickHighlighted()"
+            <input x-ref="search" x-model="query" @input="onQuery" @keydown.arrow-down.prevent="move(1)" @keydown.arrow-up.prevent="move(-1)" @keydown.enter.prevent="enterPressed()"
                    class="input pl-9" placeholder="{{ __('Type product name, scan barcode or #tag…') }}" autofocus autocomplete="off">
         </div>
         <div x-cloak x-show="scanNotice" x-transition.opacity

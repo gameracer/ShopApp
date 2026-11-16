@@ -14,7 +14,7 @@
     <meta charset="utf-8">
     <title>@yield('title')</title>
     <style>
-        @page { size: {{ $paper }}mm auto; margin: 0; }
+        @page { margin: 0; }
         * { box-sizing: border-box; }
         html, body { margin: 0; padding: 0; background: #fff; color: #000; }
         body {
