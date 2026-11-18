@@ -32,4 +32,4 @@ Artisan::command('backup:run {--if-due : Only back up if a scheduled backup is d
 
 // On a server, add the Laravel scheduler to cron (* * * * * php artisan schedule:run).
 // The desktop app calls backup:run --if-due itself (desktop/main.js).
-Schedule::command('backup:run --if-due')->everyTenMinutes()->withoutOverlapping();
+Schedule::command('backup:run --if-due')->everyMinute()->withoutOverlapping();

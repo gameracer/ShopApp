@@ -15,6 +15,7 @@ class SettingController extends Controller
             'settings' => collect(Setting::DEFAULTS)->mapWithKeys(fn ($default, $key) => [$key => Setting::get($key)]),
             'backup' => [
                 'folder' => $backups->folder(),
+                'timezone' => $backups->timezone(),
                 'last' => $backups->lastBackupAt(),
                 'next' => $backups->nextRun(),
                 'error' => $backups->lastError(),

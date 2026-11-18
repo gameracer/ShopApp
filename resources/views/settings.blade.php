@@ -90,7 +90,7 @@
             @endif
         </dd>
         <dt class="text-slate-500">{{ __('Next automatic backup') }}</dt>
-        <dd>{{ $backup['next'] ? $fmt($backup['next']) : __('Off') }}</dd>
+        <dd>{{ $backup['next'] ? $fmt($backup['next']) : __('Off') }} <span class="text-xs text-slate-500">({{ $backup['timezone'] }})</span></dd>
         <dt class="text-slate-500">{{ __('Backup folder') }}</dt>
         <dd class="break-all font-mono text-xs leading-5">{{ $backup['folder'] }}</dd>
     </dl>
@@ -102,7 +102,8 @@
 
     <form method="POST" action="{{ route('backups.settings') }}" class="space-y-4">
         @csrf @method('PUT')
-        <input type="hidden" name="backup_timezone" x-init="try { $el.value = Intl.DateTimeFormat().resolvedOptions().timeZone || '' } catch {}">
+        {{-- An expression, not a statement: Alpine cannot run try/catch in x-init. --}}
+        <input type="hidden" name="backup_timezone" x-init="$el.value = (window.Intl && Intl.DateTimeFormat().resolvedOptions().timeZone) || ''">
 
         <label class="flex items-start gap-2 text-sm">
             <input type="checkbox" name="backup_enabled" value="1" x-model="enabled" class="mt-0.5">

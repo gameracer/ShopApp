@@ -33,7 +33,7 @@ const CACHE = path.join(DATA, 'cache');
 const BACKUPS = path.join(DATA, 'backups');
 const LOGS = path.join(DATA, 'logs');
 const DEVICES = path.join(DATA, 'devices.json');
-const BACKUP_CHECK_MS = 10 * 60 * 1000; // how often to ask Laravel whether a scheduled backup is due
+const BACKUP_CHECK_MS = 60 * 1000; // how often to ask Laravel whether a scheduled backup is due (so it runs on the minute set)
 const PREFERRED_PORT = 8765;
 
 let mainWindow = null;
@@ -86,6 +86,8 @@ function buildEnv(port) {
         DB_CONNECTION: 'sqlite',
         DB_DATABASE: DB_PATH,
         SHOPAPP_BACKUP_PATH: BACKUPS,
+        // Windows' timezone, for the backup schedule until one is saved in Settings → Backups.
+        SHOPAPP_TIMEZONE: Intl.DateTimeFormat().resolvedOptions().timeZone || '',
         SHOPAPP_STORAGE_PATH: STORAGE,
         APP_SERVICES_CACHE: path.join(CACHE, 'services.php'),
         APP_PACKAGES_CACHE: path.join(CACHE, 'packages.php'),
@@ -99,10 +101,11 @@ function buildEnv(port) {
     };
 }
 
-function php(args, opts = {}) {
+/** `quiet`: don't log a run that printed nothing (the every-minute backup check). */
+function php(args, { quiet = false, ...opts } = {}) {
     return new Promise((resolve, reject) => {
         execFile(PHP_BIN, args, { cwd: APP_DIR, env, windowsHide: true, timeout: 120000, ...opts }, (err, stdout, stderr) => {
-            log(`php ${args.join(' ')}`, stdout.trim(), stderr.trim());
+            if (!quiet || err || stdout.trim() || stderr.trim()) log(`php ${args.join(' ')}`, stdout.trim(), stderr.trim());
             err ? reject(new Error(stderr.trim() || stdout.trim() || err.message)) : resolve(stdout);
         });
     });
@@ -160,14 +163,15 @@ async function backupDatabase(label) {
 
 /** `artisan backup:run …`; resolves to the new backup's path, or null when nothing was due. */
 async function laravelBackup(...args) {
-    const out = (await artisan('backup:run', ...args)).trim().split(/\r?\n/).pop()?.trim();
+    const out = (await php(['artisan', 'backup:run', ...args, '--no-interaction'], { quiet: args.includes('--if-due') }))
+        .trim().split(/\r?\n/).pop()?.trim();
     return out && out.endsWith('.sqlite') ? out : null;
 }
 
 let backupRunning = null;
 let backupTimer = null;
 
-/** Run a scheduled backup if one is due (checked at start and every few minutes). */
+/** Run a scheduled backup if one is due (checked at start and every minute). */
 function scheduledBackup() {
     if (backupRunning || quitting) return backupRunning;
     backupRunning = laravelBackup('--if-due')

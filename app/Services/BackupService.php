@@ -219,12 +219,20 @@ class BackupService
         return is_file($path) ? $path : null;
     }
 
-    /** The shop's timezone (saved from the owner's computer), used for the backup time. */
+    /**
+     * The shop's timezone, used for the backup time: the one saved from the owner's browser,
+     * else this computer's (the desktop app passes it as SHOPAPP_TIMEZONE), else the app's.
+     */
     public function timezone(): string
     {
-        $tz = (string) Setting::get('backup_timezone');
+        $zones = timezone_identifiers_list(\DateTimeZone::ALL_WITH_BC);
+        foreach ([Setting::get('backup_timezone'), config('app.local_timezone')] as $tz) {
+            if (is_string($tz) && $tz !== '' && in_array($tz, $zones, true)) {
+                return $tz;
+            }
+        }
 
-        return in_array($tz, timezone_identifiers_list(), true) ? $tz : config('app.timezone');
+        return config('app.timezone');
     }
 
     /** Keep the newest automatic backups (owner's setting) and the newest KEEP_OTHER other backups. */

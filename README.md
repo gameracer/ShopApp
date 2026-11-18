@@ -95,7 +95,7 @@ The setup page closes for good once the first user exists. More users can be add
 
 ### Automatic backups (server)
 
-*Settings → Backups* sets the schedule (`php artisan backup:run --if-due` is registered with the Laravel scheduler every 10 minutes). On a server, run the scheduler from cron:
+*Settings → Backups* sets the schedule (`php artisan backup:run --if-due` is registered with the Laravel scheduler every minute). On a server, run the scheduler from cron:
 
 ```
 * * * * * cd /path/to/shopapp && php artisan schedule:run >> /dev/null 2>&1

@@ -191,4 +191,29 @@ class BackupTest extends TestCase
         $this->assertNotEmpty(Setting::get('backup_last_error'));
         $this->actingAs($owner)->get('/settings')->assertSee('Last backup problem');
     }
+
+    public function test_computers_timezone_is_used_until_one_is_saved(): void
+    {
+        $backups = app(BackupService::class);
+        Carbon::setTestNow('2026-11-18 06:44:00'); // 09:44 in East Africa
+        Setting::put(['backup_frequency' => 'daily', 'backup_time' => '09:43', 'backup_timezone' => '',
+            'backup_last_at' => '2026-11-18T06:41:50+00:00']);
+
+        // Nothing saved and no computer timezone: UTC, so 09:43 is still hours away.
+        $this->assertSame('UTC', $backups->timezone());
+        $this->assertFalse($backups->isDue());
+
+        // The desktop app passes Windows' timezone (SHOPAPP_TIMEZONE).
+        config(['app.local_timezone' => 'Africa/Nairobi']);
+        $this->assertSame('Africa/Nairobi', $backups->timezone());
+        $this->assertTrue($backups->isDue());
+
+        // A timezone saved in Settings wins.
+        Setting::put(['backup_timezone' => 'Africa/Dar_es_Salaam']);
+        $this->assertSame('Africa/Dar_es_Salaam', $backups->timezone());
+
+        $this->actingAs(User::factory()->owner()->create())->get('/settings')
+            ->assertSee('Africa/Dar_es_Salaam')
+            ->assertDontSee('try {', false);
+    }
 }

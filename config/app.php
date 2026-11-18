@@ -67,6 +67,10 @@ return [
 
     'timezone' => 'UTC',
 
+    // The shop computer's own timezone (the desktop app passes Windows' zone), used for
+    // the backup schedule when none was saved in Settings → Backups.
+    'local_timezone' => env('SHOPAPP_TIMEZONE'),
+
     /*
     |--------------------------------------------------------------------------
     | Application Version
