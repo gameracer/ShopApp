@@ -37,6 +37,7 @@
             ['route' => 'settings.edit', 'match' => 'settings.*', 'icon' => 'cog', 'label' => __('Settings')],
         ]);
     }
+    $nav[] = ['route' => 'help', 'match' => 'help', 'icon' => 'help', 'label' => __('Help')];
 @endphp
 
 @if ($user->isSeller())
@@ -79,11 +80,16 @@
                 <a href="{{ route('products.index') }}" class="block px-4 py-2 text-sm hover:bg-slate-50">{{ __('Products') }}</a>
                 <a href="{{ route('customers.index') }}" class="block px-4 py-2 text-sm hover:bg-slate-50">{{ __('Customers') }}</a>
                 <a href="{{ route('profile.edit') }}" class="block px-4 py-2 text-sm hover:bg-slate-50">{{ __('My profile') }}</a>
+                <a href="{{ route('help') }}" class="block px-4 py-2 text-sm hover:bg-slate-50">{{ __('Help') }}</a>
                 <div class="px-4 py-2"><x-lang-switch /></div>
                 <form method="POST" action="{{ route('logout') }}" class="border-t border-slate-100">
                     @csrf
                     <button class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-rose-600 hover:bg-slate-50"><x-icon name="logout" class="h-4 w-4" /> {{ __('Log out') }}</button>
                 </form>
+                <div class="border-t border-slate-100 px-4 pt-2 pb-1 text-xs text-slate-400">
+                    <x-app-version class="block" />
+                    <x-credit class="block" />
+                </div>
             </div>
         </div>
     </header>
@@ -114,8 +120,12 @@
                 </a>
             @endforeach
         </nav>
-        <div class="border-t border-slate-800 p-4 text-xs text-slate-400">
-            <x-lang-switch :dark="true" />
+        <div class="space-y-2 border-t border-slate-800 p-4 text-xs text-slate-400">
+            <div class="flex items-center justify-between gap-2">
+                <x-lang-switch :dark="true" />
+                <x-app-version class="text-slate-500" />
+            </div>
+            <x-credit class="block text-slate-500" />
         </div>
     </aside>
 
@@ -147,6 +157,7 @@
                     </button>
                     <div x-cloak x-show="open" @click.outside="open = false" class="absolute right-0 mt-2 w-48 rounded-lg border border-slate-200 bg-white py-1 shadow-lg">
                         <a href="{{ route('profile.edit') }}" class="block px-4 py-2 text-sm hover:bg-slate-50">{{ __('My profile') }}</a>
+                        <a href="{{ route('help') }}" class="block px-4 py-2 text-sm hover:bg-slate-50">{{ __('Help') }}</a>
                         <form method="POST" action="{{ route('logout') }}">
                             @csrf
                             <button class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-rose-600 hover:bg-slate-50"><x-icon name="logout" class="h-4 w-4" /> {{ __('Log out') }}</button>

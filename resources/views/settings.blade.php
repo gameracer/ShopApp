@@ -59,6 +59,136 @@
     <button class="btn-primary">{{ __('Save') }}</button>
 </form>
 
+{{-- Automatic backups. Times are in the timezone of the computer the settings were saved on. --}}
+@php
+    $fmt = fn ($date) => $date?->locale(app()->getLocale())->isoFormat('ddd D MMM YYYY, HH:mm');
+    $weekdays = [__('Sunday'), __('Monday'), __('Tuesday'), __('Wednesday'), __('Thursday'), __('Friday'), __('Saturday')];
+@endphp
+<div id="backups" class="card mt-6 max-w-xl space-y-4 p-6"
+     x-data="{
+        desktop: !!window.ShopDevices?.desktop?.chooseBackupFolder,
+        enabled: @js(old('backup_enabled', $settings['backup_enabled']) === '1'),
+        frequency: @js(old('backup_frequency', $settings['backup_frequency'])),
+        copyPath: @js(old('backup_copy_path', $settings['backup_copy_path'])),
+        async chooseFolder() {
+            const folder = await ShopDevices.desktop.chooseBackupFolder(this.copyPath || null);
+            if (folder) this.copyPath = folder;
+        },
+     }">
+    <div>
+        <h2 class="card-title">{{ __('Backups') }}</h2>
+        <p class="mt-1 text-xs text-slate-500">{{ __('A backup is a full copy of the shop data: products, sales, customers, credit, expenses, users and settings.') }}</p>
+    </div>
+
+    <dl class="grid gap-x-4 gap-y-1 rounded-lg bg-slate-50 px-4 py-3 text-sm sm:grid-cols-[auto_1fr]">
+        <dt class="text-slate-500">{{ __('Last backup') }}</dt>
+        <dd>
+            @if ($backup['last'])
+                {{ $fmt($backup['last']) }} <span class="text-slate-500">({{ $backup['last']->locale(app()->getLocale())->diffForHumans() }})</span>
+            @else
+                <span class="text-amber-700">{{ __('No backup yet') }}</span>
+            @endif
+        </dd>
+        <dt class="text-slate-500">{{ __('Next automatic backup') }}</dt>
+        <dd>{{ $backup['next'] ? $fmt($backup['next']) : __('Off') }}</dd>
+        <dt class="text-slate-500">{{ __('Backup folder') }}</dt>
+        <dd class="break-all font-mono text-xs leading-5">{{ $backup['folder'] }}</dd>
+    </dl>
+    @if ($backup['error'])
+        <p class="flex items-start gap-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800">
+            <x-icon name="warning" class="mt-0.5 h-4 w-4 shrink-0" /> <span>{{ __('Last backup problem') }}: {{ $backup['error'] }}</span>
+        </p>
+    @endif
+
+    <form method="POST" action="{{ route('backups.settings') }}" class="space-y-4">
+        @csrf @method('PUT')
+        <input type="hidden" name="backup_timezone" x-init="try { $el.value = Intl.DateTimeFormat().resolvedOptions().timeZone || '' } catch {}">
+
+        <label class="flex items-start gap-2 text-sm">
+            <input type="checkbox" name="backup_enabled" value="1" x-model="enabled" class="mt-0.5">
+            <span>{{ __('Back up automatically') }}</span>
+        </label>
+
+        {{-- Hidden fields are still sent, so the schedule is kept while automatic backups are off. --}}
+        <div x-show="enabled" class="space-y-4">
+            <div class="grid gap-4 sm:grid-cols-3">
+                <div>
+                    <label class="label">{{ __('How often') }}</label>
+                    <select name="backup_frequency" x-model="frequency" class="input">
+                        <option value="hourly">{{ __('Every hour') }}</option>
+                        <option value="daily">{{ __('Every day') }}</option>
+                        <option value="weekly">{{ __('Every week') }}</option>
+                    </select>
+                </div>
+                <div x-show="frequency === 'weekly'">
+                    <label class="label">{{ __('Day') }}</label>
+                    <select name="backup_weekday" class="input">
+                        @foreach ($weekdays as $i => $day)
+                            <option value="{{ $i }}" @selected((string) old('backup_weekday', $settings['backup_weekday']) === (string) $i)>{{ $day }}</option>
+                        @endforeach
+                    </select>
+                </div>
+                <div x-show="frequency !== 'hourly'">
+                    <label class="label">{{ __('Time') }}</label>
+                    <input type="time" name="backup_time" class="input" value="{{ old('backup_time', $settings['backup_time']) }}" required>
+                    @error('backup_time')<p class="error">{{ $message }}</p>@enderror
+                </div>
+            </div>
+            <p class="text-xs text-slate-500">{{ __('If the computer is off at that time, the backup is made as soon as ShopApp is opened again.') }}</p>
+
+            <div>
+                <label class="label">{{ __('Number of automatic backups to keep') }}</label>
+                <input type="number" name="backup_keep" min="1" max="365" class="input w-32" value="{{ old('backup_keep', $settings['backup_keep']) }}" required>
+                <p class="mt-1 text-xs text-slate-500">{{ __('Older automatic backups are deleted. Manual backups and backups made before updates are kept separately (the newest 30).') }}</p>
+                @error('backup_keep')<p class="error">{{ $message }}</p>@enderror
+            </div>
+
+            <label x-show="desktop" class="flex items-start gap-2 text-sm">
+                <input type="checkbox" name="backup_on_close" value="1" class="mt-0.5" @checked(old('backup_on_close', $settings['backup_on_close']) === '1')>
+                <span>{{ __('Also back up when ShopApp is closed') }}</span>
+            </label>
+        </div>
+
+        <div>
+            <label class="label">{{ __('Also copy every backup to this folder (optional)') }}</label>
+            <div class="flex gap-2">
+                <input name="backup_copy_path" x-model="copyPath" class="input font-mono text-sm" maxlength="255" placeholder="{{ __('e.g. D:\ShopApp backups') }}">
+                <button type="button" x-show="desktop" @click="chooseFolder()" class="btn-secondary shrink-0">{{ __('Choose…') }}</button>
+            </div>
+            <p class="mt-1 text-xs text-slate-500">{{ __('A USB drive, a second disk or a OneDrive / Google Drive folder keeps your data safe if this computer breaks or is stolen.') }}</p>
+            @error('backup_copy_path')<p class="error">{{ $message }}</p>@enderror
+        </div>
+
+        <button class="btn-primary">{{ __('Save') }}</button>
+    </form>
+
+    <div class="flex flex-wrap items-center gap-2 border-t border-slate-100 pt-4">
+        <form method="POST" action="{{ route('backups.store') }}">
+            @csrf
+            <button class="btn-secondary"><x-icon name="download" class="h-4 w-4" /> {{ __('Back up now') }}</button>
+        </form>
+        <button type="button" x-show="desktop" x-cloak @click="ShopDevices.desktop.openBackupFolder()" class="btn-secondary">{{ __('Open backup folder') }}</button>
+        <button type="button" x-show="desktop" x-cloak @click="ShopDevices.desktop.restoreBackup()" class="btn-secondary">{{ __('Restore a backup…') }}</button>
+    </div>
+
+    @if ($backup['files'])
+        <div>
+            <span class="label">{{ __('Recent backups') }}</span>
+            <ul class="divide-y divide-slate-100 text-sm">
+                @foreach ($backup['files'] as $file)
+                    <li class="flex items-center justify-between gap-3 py-1.5">
+                        <span>
+                            {{ $fmt($file['at']) }}
+                            <span class="text-xs text-slate-500">· {{ $file['automatic'] ? __('automatic') : __('manual / before update') }} · {{ \Illuminate\Support\Number::fileSize($file['size'], 1) }}</span>
+                        </span>
+                        <a href="{{ route('backups.download', $file['name']) }}" class="text-xs font-medium text-emerald-700 hover:underline" title="{{ $file['name'] }}">{{ __('Download') }}</a>
+                    </li>
+                @endforeach
+            </ul>
+        </div>
+    @endif
+</div>
+
 {{-- Per-computer device setup. The printer choice is saved on this computer, not in the shop database. --}}
 <div class="card mt-6 max-w-xl space-y-4 p-6"
      x-data="{

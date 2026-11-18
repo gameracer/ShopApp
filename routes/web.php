@@ -3,10 +3,12 @@
 use App\Http\Controllers\AlertController;
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\Auth\SetupController;
+use App\Http\Controllers\BackupController;
 use App\Http\Controllers\CreditController;
 use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ExpenseController;
+use App\Http\Controllers\HelpController;
 use App\Http\Controllers\LocaleController;
 use App\Http\Controllers\ProductController;
 use App\Http\Controllers\ProductImportController;
@@ -38,6 +40,7 @@ Route::middleware('auth')->group(function () {
 
     Route::get('/', DashboardController::class)->name('dashboard');
     Route::get('/alerts', AlertController::class)->name('alerts');
+    Route::get('/help', HelpController::class)->name('help');
 
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::put('/profile', [ProfileController::class, 'update'])->name('profile.update');
@@ -81,5 +84,8 @@ Route::middleware('auth')->group(function () {
         Route::get('/settings', [SettingController::class, 'edit'])->name('settings.edit');
         Route::put('/settings', [SettingController::class, 'update'])->name('settings.update');
         Route::get('/settings/test-receipt', [SettingController::class, 'testReceipt'])->name('settings.test-receipt');
+        Route::put('/settings/backups', [BackupController::class, 'update'])->name('backups.settings');
+        Route::post('/backups', [BackupController::class, 'store'])->name('backups.store');
+        Route::get('/backups/{file}', [BackupController::class, 'download'])->name('backups.download');
     });
 });

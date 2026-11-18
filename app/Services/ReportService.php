@@ -124,6 +124,49 @@ class ReportService
         return $rows;
     }
 
+    /**
+     * Sales totals for the dashboard chart: the last 30 days, the last 12 months, and every
+     * year since the first sale. Grouped in SQL on the leading characters of sold_at
+     * ("Y-m-d H:i:s"), which works the same on SQLite and MySQL. Empty buckets are kept
+     * so gaps show as gaps.
+     *
+     * @return array<string, list<array{label: string, short: string, total: float, count: int}>>
+     */
+    public function salesTrend(): array
+    {
+        $now = CarbonImmutable::now();
+        $firstYear = (int) (Sale::min(DB::raw('SUBSTR(sold_at, 1, 4)')) ?? $now->year);
+
+        return [
+            'daily' => $this->trend(10, CarbonPeriod::create($now->subDays(29)->startOfDay(), '1 day', $now->startOfDay()), 'Y-m-d', 'D d M Y', 'd/m'),
+            'monthly' => $this->trend(7, CarbonPeriod::create($now->subMonthsNoOverflow(11)->startOfMonth(), '1 month', $now->startOfMonth()), 'Y-m', 'F Y', 'M'),
+            'yearly' => $this->trend(4, CarbonPeriod::create($now->setYear(min($firstYear, $now->year - 4))->startOfYear(), '1 year', $now->startOfYear()), 'Y', 'Y', 'Y'),
+        ];
+    }
+
+    private function trend(int $keyLength, CarbonPeriod $points, string $keyFormat, string $labelFormat, string $shortFormat): array
+    {
+        $rows = Sale::query()
+            ->where('sold_at', '>=', $points->getStartDate()->format('Y-m-d H:i:s'))
+            ->selectRaw("SUBSTR(sold_at, 1, {$keyLength}) as bucket, SUM(total) as total, COUNT(*) as n")
+            ->groupBy('bucket')
+            ->get()
+            ->keyBy('bucket');
+
+        $out = [];
+        foreach ($points as $point) {
+            $row = $rows->get($point->format($keyFormat));
+            $out[] = [
+                'label' => $point->translatedFormat($labelFormat),
+                'short' => $point->translatedFormat($shortFormat),
+                'total' => round((float) ($row->total ?? 0), 2),
+                'count' => (int) ($row->n ?? 0),
+            ];
+        }
+
+        return $out;
+    }
+
     private function topProducts(CarbonImmutable $start, CarbonImmutable $end, ?int $sellerId): Collection
     {
         return SaleItem::query()

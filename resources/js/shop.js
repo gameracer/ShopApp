@@ -186,7 +186,7 @@ export function posApp(config) {
             const last = this.cart.findIndex((l) => l.product_id === this.lastId);
             display?.postMessage({
                 type: 'cart',
-                ...this.order(),
+                ...forCustomer(this.order()),
                 last: last === -1 ? this.cart.length - 1 : last,
                 cashGiven: Number(this.cashGiven || 0),
                 change: this.change,
@@ -405,7 +405,7 @@ export function posApp(config) {
                 change: this.paymentMethod === 'cash' ? this.change : this.isSplit ? this.splitChange : 0,
                 balance: this.isCredit ? this.balanceDue : this.isSplit ? this.splitRemaining : 0,
             };
-            display?.postMessage({ type: 'paid', ...paid });
+            display?.postMessage({ type: 'paid', ...forCustomer(paid) });
 
             // Older server without the till links: open the sale page as before.
             if (!data.receipt_url) return void (window.location = data.redirect);
@@ -418,6 +418,14 @@ export function posApp(config) {
             if (data.auto_print) this.printDone(false);
         },
     });
+}
+
+/**
+ * What the customer display may see of an order. Payment method names are internal:
+ * the display only gets the method code, to choose its layout, never a label to show.
+ */
+function forCustomer({ methodLabel, payments, ...order }) {
+    return order;
 }
 
 export function stockApp(config) {

@@ -6,7 +6,7 @@
  * browser popup dragged to the second monitor. No server round trips.
  *
  * Messages from the till:
- *   { type: 'cart', lines: [{ name, quantity, unit, price, subtotal }], last, total, units, method, methodLabel,
+ *   { type: 'cart', lines: [{ name, quantity, unit, price, subtotal }], last, total, units, method (code only, for layout),
  *     customer, cashier, cashGiven, change, amountPaid, balance }
  *   { type: 'paid', ...the same order fields, invoice, paid, change, balance }
  * From the display:

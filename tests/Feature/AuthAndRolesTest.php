@@ -98,4 +98,16 @@ class AuthAndRolesTest extends TestCase
         ])->assertSessionHasErrors('role');
         $this->assertTrue($owner->fresh()->isOwner());
     }
+
+    public function test_app_version_and_creator_are_shown_on_login_and_for_both_roles(): void
+    {
+        config(['app.version' => '9.8.7']);
+
+        $owner = User::factory()->owner()->create();
+        $seller = User::factory()->seller()->create();
+
+        $this->get('/login')->assertSee('v9.8.7')->assertSee('Mndima Technologies');
+        $this->actingAs($owner)->get('/')->assertSee('v9.8.7')->assertSee('Developed by');
+        $this->actingAs($seller)->get('/')->assertSee('v9.8.7')->assertSee('Mndima Technologies');
+    }
 }

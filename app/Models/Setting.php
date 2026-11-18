@@ -20,6 +20,15 @@ class Setting extends Model
         'receipt_footer' => '',
         'auto_print_receipt' => '0',
         'scanner_beep' => '1',
+        // Automatic backups (see App\Services\BackupService).
+        'backup_enabled' => '1',
+        'backup_frequency' => 'daily',
+        'backup_time' => '20:00',
+        'backup_weekday' => '0', // 0 = Sunday … 6 = Saturday
+        'backup_keep' => '14',
+        'backup_copy_path' => '',
+        'backup_on_close' => '1',
+        'backup_timezone' => '',
     ];
 
     /** Thermal paper roll widths in millimetres. */

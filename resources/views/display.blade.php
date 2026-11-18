@@ -35,7 +35,8 @@
         @if ($phone = \App\Models\Setting::get('shop_phone'))<p class="text-xl text-slate-500">{{ __('Tel') }}: {{ $phone }}</p>@endif
     </main>
 
-    {{-- Selling or just paid: the order on the left, totals and payment on the right --}}
+    {{-- Selling or just paid: the order on the left, totals on the right.
+         The payment method is internal and never shown here. --}}
     <main x-cloak x-show="state !== 'idle'" class="grid min-h-0 flex-1 grid-cols-5">
         <section class="col-span-3 flex min-h-0 flex-col border-r border-slate-800">
             <div class="flex items-center justify-between gap-4 border-b border-slate-800 px-8 py-3 text-lg">
@@ -95,22 +96,19 @@
             </div>
 
             <div class="space-y-2 border-t border-slate-800 pt-5 text-2xl">
-                <p class="flex justify-between"><span class="text-slate-400">{{ __('Payment') }}</span><span x-text="cart.methodLabel"></span></p>
                 <div x-show="cart.method === 'cash' && cart.cashGiven > 0" class="space-y-2">
-                    <p class="flex justify-between"><span class="text-slate-400">{{ __('Cash received') }}</span><span class="tabular-nums" x-text="money(cart.cashGiven)"></span></p>
+                    <p class="flex justify-between"><span class="text-slate-400">{{ __('Paid') }}</span><span class="tabular-nums" x-text="money(cart.cashGiven)"></span></p>
                     <p x-show="cart.cashGiven >= cart.total" class="flex justify-between text-3xl font-bold"><span class="text-slate-400">{{ __('Change') }}</span><span class="tabular-nums text-amber-300" x-text="money(cart.change)"></span></p>
                     <p x-show="cart.cashGiven < cart.total" class="flex justify-between text-3xl font-bold"><span class="text-slate-400">{{ __('Still to pay') }}</span><span class="tabular-nums text-rose-300" x-text="money(cart.total - cart.cashGiven)"></span></p>
                 </div>
                 <div x-show="cart.method === 'split'" class="space-y-2">
-                    <template x-for="p in cart.payments ?? []" :key="p.label">
-                        <p class="flex justify-between"><span class="text-slate-400" x-text="p.label"></span><span class="tabular-nums" x-text="money(p.amount)"></span></p>
-                    </template>
+                    <p x-show="cart.amountPaid > 0" class="flex justify-between"><span class="text-slate-400">{{ __('Paid') }}</span><span class="tabular-nums" x-text="money(cart.amountPaid)"></span></p>
                     <p x-show="cart.splitChange > 0" class="flex justify-between text-3xl font-bold"><span class="text-slate-400">{{ __('Change') }}</span><span class="tabular-nums text-amber-300" x-text="money(cart.splitChange)"></span></p>
                     <p x-show="cart.balance > 0" class="flex justify-between text-3xl font-bold"><span class="text-slate-400">{{ __('Still to pay') }}</span><span class="tabular-nums text-rose-300" x-text="money(cart.balance)"></span></p>
                 </div>
                 <div x-show="cart.method === 'credit'" class="space-y-2">
                     <p class="flex justify-between"><span class="text-slate-400">{{ __('Paid now') }}</span><span class="tabular-nums" x-text="money(cart.amountPaid)"></span></p>
-                    <p class="flex justify-between text-3xl font-bold"><span class="text-slate-400">{{ __('Balance (credit)') }}</span><span class="tabular-nums text-rose-300" x-text="money(cart.balance)"></span></p>
+                    <p class="flex justify-between text-3xl font-bold"><span class="text-slate-400">{{ __('Balance') }}</span><span class="tabular-nums text-rose-300" x-text="money(cart.balance)"></span></p>
                 </div>
             </div>
         </section>
@@ -123,14 +121,10 @@
             </div>
             <div class="space-y-2 text-2xl">
                 <p x-show="paid?.invoice" class="flex justify-between"><span class="text-slate-400">{{ __('Invoice') }}</span><span x-text="paid?.invoice"></span></p>
-                <p x-show="paid?.methodLabel" class="flex justify-between"><span class="text-slate-400">{{ __('Payment') }}</span><span x-text="paid?.methodLabel"></span></p>
                 <p class="flex justify-between text-3xl font-bold"><span class="text-slate-400">{{ __('Total') }}</span><span class="tabular-nums text-emerald-400" x-text="money(paid?.total)"></span></p>
-                <template x-for="p in paid?.payments ?? []" :key="p.label">
-                    <p class="flex justify-between"><span class="text-slate-400" x-text="p.label"></span><span class="tabular-nums" x-text="money(p.amount)"></span></p>
-                </template>
                 <p class="flex justify-between"><span class="text-slate-400">{{ __('Paid') }}</span><span class="tabular-nums" x-text="money(paid?.paid)"></span></p>
                 <p x-show="paid?.change > 0" class="flex justify-between text-3xl font-bold"><span class="text-slate-400">{{ __('Change') }}</span><span class="tabular-nums text-amber-300" x-text="money(paid?.change)"></span></p>
-                <p x-show="paid?.balance > 0" class="flex justify-between text-3xl font-bold"><span class="text-slate-400">{{ __('Balance (credit)') }}</span><span class="tabular-nums text-rose-300" x-text="money(paid?.balance)"></span></p>
+                <p x-show="paid?.balance > 0" class="flex justify-between text-3xl font-bold"><span class="text-slate-400">{{ __('Balance') }}</span><span class="tabular-nums text-rose-300" x-text="money(paid?.balance)"></span></p>
             </div>
             @if ($footer = \App\Models\Setting::get('receipt_footer'))<p class="text-center text-xl text-slate-400">{{ $footer }}</p>@endif
         </section>

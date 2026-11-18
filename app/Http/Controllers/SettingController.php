@@ -3,15 +3,23 @@
 namespace App\Http\Controllers;
 
 use App\Models\Setting;
+use App\Services\BackupService;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 
 class SettingController extends Controller
 {
-    public function edit()
+    public function edit(BackupService $backups)
     {
         return view('settings', [
             'settings' => collect(Setting::DEFAULTS)->mapWithKeys(fn ($default, $key) => [$key => Setting::get($key)]),
+            'backup' => [
+                'folder' => $backups->folder(),
+                'last' => $backups->lastBackupAt(),
+                'next' => $backups->nextRun(),
+                'error' => $backups->lastError(),
+                'files' => array_slice($backups->list(), 0, 10),
+            ],
         ]);
     }
 

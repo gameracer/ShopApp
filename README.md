@@ -1,5 +1,7 @@
 # ShopApp – Shop Management System
 
+Developed by **Mndima Technologies**.
+
 A shop management app built with **Laravel 13** and **Tailwind CSS 4** (with Alpine.js). The whole interface is available in **English** and **Kiswahili**.
 
 ## Features
@@ -36,6 +38,13 @@ Other details:
 | See buying prices & profit | ✅ | ❌ |
 | Expenses, reports, users, settings | ✅ | ❌ |
 | Delete a sale (stock is restored) | ✅ | ❌ |
+
+## User manual
+
+An illustrated manual in English and Kiswahili is built into the app under **Help** (owners: sidebar; sellers: the menu under their name; Windows app: **F1**). It follows the user's language.
+
+- Text: [docs/manual/en.md](docs/manual/en.md) and [docs/manual/sw.md](docs/manual/sw.md). Edit these; the Help page renders them.
+- Screenshots: `public/manual/<locale>/*.webp`. Retake them all after UI changes with `npm run build && npm run manual:screenshots` (add a name to retake one, e.g. `npm run manual:screenshots -- till`). The script uses a throwaway demo database and headless Chrome or Edge, so it never touches real data.
 
 ## Requirements
 
@@ -84,14 +93,25 @@ In production (`APP_ENV=production`, the Docker image and the desktop app) no ac
 
 The setup page closes for good once the first user exists. More users can be added later under *Users*.
 
+### Automatic backups (server)
+
+*Settings → Backups* sets the schedule (`php artisan backup:run --if-due` is registered with the Laravel scheduler every 10 minutes). On a server, run the scheduler from cron:
+
+```
+* * * * * cd /path/to/shopapp && php artisan schedule:run >> /dev/null 2>&1
+```
+
+Backups are SQLite copies written to `storage/app/backups` (or `SHOPAPP_BACKUP_PATH`). `php artisan backup:run` makes one by hand. With MySQL/PostgreSQL, use the database's own backup tools instead.
+
 ## Desktop app (Windows)
 
 `desktop/` packages ShopApp as a Windows app with [Electron](https://www.electronjs.org/). It bundles a portable PHP 8.4 and the Laravel app, runs fully offline on SQLite, and updates itself from GitHub Releases.
 
 - **Data** is kept in `%APPDATA%\ShopApp` (database, logs, backups), so reinstalling or updating never touches it.
-- **Backups**: one is taken automatically before every update, and *File → Back up data now / Restore a backup…* handles manual ones. The 30 most recent are kept in `%APPDATA%\ShopApp\backups`.
+- **Backups**: automatic backups run on the schedule set in *Settings → Backups* (every hour, day or week at a chosen time; daily at 20:00 by default), and optionally when ShopApp closes. A backup missed while the computer was off is taken as soon as ShopApp opens again. Each backup can also be copied to a second folder (USB drive, OneDrive…). Backups are kept in `%APPDATA%\ShopApp\backups`: the newest *N* automatic ones (set in Settings) plus the newest 30 manual / before-update ones. One is also taken before every update, and *File → Back up data now / Restore a backup…* handles manual ones.
 - **Date check**: on every launch, the user confirms the computer's date and time. Answering *No* opens Windows date settings and closes ShopApp, because sales, expiry alerts and reports depend on the clock. There is an extra warning if the clock is earlier than the last launch.
 - **Updates**: when you publish releases to GitHub (see below), the app checks for updates on start and under *Help → Check for updates*, downloads them in the background and asks to restart.
+- **Installer clean-up**: after a successful install, the installer deletes itself (`desktop/resources/installer.nsh`), both for downloaded installers and for automatic updates. It is kept when run from a USB stick, CD or network drive, so one copy can set up several computers, or when started with `/KEEP` (`ShopApp-Setup-x.y.z.exe /KEEP`).
 
 ### Building and releasing
 
@@ -134,7 +154,7 @@ If a barcode doesn't work, scan it in *Settings → Devices on this computer →
 
 **Dual-screen touch POS** (touch screen for the cashier, second screen facing the customer):
 
-- **Customer display.** Like a supermarket screen: the customer sees a numbered list of their items (quantity, price, amount), the last item scanned in large type, the number of items, the total to pay, the payment method (each part of a split payment), cash given and change or balance, plus the customer and cashier names. After payment it shows *Thank you* with the invoice number, the order and the change for 15 seconds, then a welcome screen with the shop name.
+- **Customer display.** Like a supermarket screen: the customer sees a numbered list of their items (quantity, price, amount), the last item scanned in large type, the number of items, the total to pay, the amount paid and change or balance (never the payment method, which is internal), plus the customer and cashier names. After payment it shows *Thank you* with the invoice number, the order and the change for 15 seconds, then a welcome screen with the shop name.
   - **Desktop app:** opens it full screen on the second screen automatically, and follows screens being plugged in or out. The display never takes keyboard focus, so the barcode scanner keeps typing into the till. Turn it off or pick a screen under *View → Customer display* (**Ctrl+Shift+D**) or *Settings → Devices on this computer*.
   - **Web browser:** *Customer display* on *New sale* opens it in a popup. Drag it to the second screen and press F11. The page is `/display`. It needs no login because it only shows what the till sends it.
 - **Desktop app shortcuts.** **F11**: full screen on/off. **Ctrl+Shift+D**: customer display on/off. **Ctrl+Shift+M**: show/hide the menu bar (when hidden, **Alt** shows it for a moment). These choices are remembered on each computer.

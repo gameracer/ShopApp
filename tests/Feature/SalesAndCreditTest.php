@@ -119,7 +119,7 @@ class SalesAndCreditTest extends TestCase
         $this->assertEquals(1800, Sale::first()->total);
     }
 
-    public function test_till_can_send_empty_payments_for_a_single_method_and_receipt_shows_the_method(): void
+    public function test_till_can_send_empty_payments_for_a_single_method_and_receipt_hides_the_method(): void
     {
         $seller = User::factory()->seller()->create();
         $product = Product::factory()->create(['quantity' => 10, 'selling_price' => 1000]);
@@ -135,7 +135,10 @@ class SalesAndCreditTest extends TestCase
         ])->assertOk();
 
         $this->actingAs($seller)->get(route('sales.receipt', Sale::firstOrFail()))
-            ->assertOk()->assertSeeInOrder([__('Payment method'), __('Cash')]);
+            ->assertOk()
+            ->assertDontSee(__('Payment method'))
+            ->assertDontSee(__('Cash'))
+            ->assertSeeInOrder([__('Paid'), '1,000']);
     }
 
     public function test_split_payment_records_each_method_and_gives_change_from_cash(): void
@@ -155,7 +158,12 @@ class SalesAndCreditTest extends TestCase
         $this->assertNull($sale->customer_id, 'no customer needed when fully paid');
         $this->assertEquals(['mobile' => 6000, 'cash' => 4000], $sale->payments->mapWithKeys(fn ($p) => [$p->method => (float) $p->amount])->all());
 
-        $this->actingAs($seller)->get(route('sales.receipt', $sale))->assertOk()->assertSee(__('Mobile'))->assertSee('4,000');
+        // The customer sees one amount paid, never how it was split between methods.
+        $this->actingAs($seller)->get(route('sales.receipt', $sale))
+            ->assertOk()
+            ->assertDontSee(__('Mobile'))
+            ->assertDontSee(__('Cash'))
+            ->assertSeeInOrder([__('Paid'), '10,000']);
     }
 
     public function test_split_payment_cannot_overpay_by_mobile_and_needs_customer_for_a_balance(): void

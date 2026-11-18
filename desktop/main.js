@@ -7,7 +7,7 @@
 //   app.key           APP_KEY, generated on first run
 //   storage/          Laravel storage (logs, sessions, compiled views)
 //   cache/            Laravel bootstrap cache
-//   backups/          automatic backups (before every update) + manual ones
+//   backups/          scheduled backups (Settings → Backups), plus ones before every update and manual ones
 //   devices.json      this computer's receipt printer, customer display and menu bar choices
 //   logs/desktop.log  this shell's log
 
@@ -33,7 +33,7 @@ const CACHE = path.join(DATA, 'cache');
 const BACKUPS = path.join(DATA, 'backups');
 const LOGS = path.join(DATA, 'logs');
 const DEVICES = path.join(DATA, 'devices.json');
-const KEEP_BACKUPS = 30;
+const BACKUP_CHECK_MS = 10 * 60 * 1000; // how often to ask Laravel whether a scheduled backup is due
 const PREFERRED_PORT = 8765;
 
 let mainWindow = null;
@@ -42,6 +42,7 @@ let phpServer = null;
 let quitting = false;
 let baseUrl = '';
 let env = {};
+let skipCloseBackup = false; // set when quitting to restart or install an update
 
 // ---------------------------------------------------------------- helpers
 
@@ -84,6 +85,7 @@ function buildEnv(port) {
         APP_VERSION: app.getVersion(),
         DB_CONNECTION: 'sqlite',
         DB_DATABASE: DB_PATH,
+        SHOPAPP_BACKUP_PATH: BACKUPS,
         SHOPAPP_STORAGE_PATH: STORAGE,
         APP_SERVICES_CACHE: path.join(CACHE, 'services.php'),
         APP_PACKAGES_CACHE: path.join(CACHE, 'packages.php'),
@@ -137,23 +139,54 @@ function waitForServer(url, timeoutMs = 30000) {
 }
 
 // ---------------------------------------------------------------- backups
+//
+// Backups are made by Laravel (app/Services/BackupService.php, `artisan backup:run`), which
+// also applies the owner's schedule, extra copy folder and retention from Settings → Backups.
+// Only the backup before an update is made here directly: it runs before the new
+// version's migrations and caches are in place.
 
+/** Plain copy with PHP alone (no Laravel), used before an update is migrated. */
 async function backupDatabase(label) {
     if (!fs.existsSync(DB_PATH)) return null;
-    const stamp = new Date().toISOString().replace(/[-:]/g, '').replace('T', '-').slice(0, 15);
+    const pad = (n) => String(n).padStart(2, '0');
+    const d = new Date();
+    const stamp = `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
     const dest = path.join(BACKUPS, `shopapp-${stamp}-${label}.sqlite`);
     // VACUUM INTO gives a consistent copy even while the app is running.
     await php(['-r', '$db = new PDO("sqlite:" . $argv[1]); $db->exec("VACUUM INTO " . $db->quote($argv[2]));', DB_PATH, dest]);
-
-    const old = fs.readdirSync(BACKUPS).filter((f) => f.endsWith('.sqlite')).sort().reverse().slice(KEEP_BACKUPS);
-    for (const f of old) fs.rmSync(path.join(BACKUPS, f), { force: true });
     log('Backup written', dest);
     return dest;
 }
 
+/** `artisan backup:run …`; resolves to the new backup's path, or null when nothing was due. */
+async function laravelBackup(...args) {
+    const out = (await artisan('backup:run', ...args)).trim().split(/\r?\n/).pop()?.trim();
+    return out && out.endsWith('.sqlite') ? out : null;
+}
+
+let backupRunning = null;
+let backupTimer = null;
+
+/** Run a scheduled backup if one is due (checked at start and every few minutes). */
+function scheduledBackup() {
+    if (backupRunning || quitting) return backupRunning;
+    backupRunning = laravelBackup('--if-due')
+        .then((dest) => dest && log('Scheduled backup written', dest))
+        .catch((e) => log('Scheduled backup failed:', e.message))
+        .finally(() => { backupRunning = null; });
+    return backupRunning;
+}
+
+function startBackupSchedule() {
+    setTimeout(scheduledBackup, 30 * 1000); // after startup settles; catches backups missed while the PC was off
+    backupTimer = setInterval(scheduledBackup, BACKUP_CHECK_MS);
+}
+
 async function backupNow() {
     try {
-        const dest = await backupDatabase('manual');
+        await backupRunning;
+        const dest = await laravelBackup('--label=manual');
+        if (!dest) throw new Error('No backup was written.');
         const { response } = await dialog.showMessageBox(mainWindow, {
             type: 'info', message: 'Backup saved', detail: dest, buttons: ['OK', 'Show in folder'],
         });
@@ -176,7 +209,9 @@ async function restoreBackup() {
     });
     if (response !== 1) return;
     try {
-        await backupDatabase('before-restore');
+        await backupRunning;
+        await laravelBackup('--label=before-restore');
+        skipCloseBackup = true;
         await stopServer();
         fs.copyFileSync(filePaths[0], DB_PATH);
         app.relaunch();
@@ -340,6 +375,23 @@ function setupDeviceIpc() {
         if (!fromApp(event)) throw new Error('Not allowed.');
         return { displays: describeDisplays(), selected: displayPref(), active: Boolean(customerWindow) };
     });
+    ipcMain.handle('backup:choose-folder', async (event, current) => {
+        if (!fromApp(event)) throw new Error('Not allowed.');
+        const { canceled, filePaths } = await dialog.showOpenDialog(mainWindow, {
+            title: 'Folder for backup copies',
+            defaultPath: typeof current === 'string' && current ? current : app.getPath('documents'),
+            properties: ['openDirectory', 'createDirectory'],
+        });
+        return canceled ? null : (filePaths[0] ?? null);
+    });
+    ipcMain.handle('backup:open-folder', (event) => {
+        if (!fromApp(event)) throw new Error('Not allowed.');
+        return shell.openPath(BACKUPS);
+    });
+    ipcMain.handle('backup:restore', (event) => {
+        if (!fromApp(event)) throw new Error('Not allowed.');
+        return restoreBackup();
+    });
     ipcMain.handle('devices:set-display', (event, value) => {
         if (!fromApp(event)) throw new Error('Not allowed.');
         writeDevices({ customerDisplay: typeof value === 'string' && value ? value : 'auto' });
@@ -485,7 +537,7 @@ function setupAutoUpdates() {
             message: `ShopApp ${info.version} is ready to install.`,
             detail: 'Your data is backed up automatically before the update is applied. Choosing "Later" installs it when you close ShopApp.',
         });
-        if (response === 0) { await stopServer(); autoUpdater.quitAndInstall(); }
+        if (response === 0) { skipCloseBackup = true; await stopServer(); autoUpdater.quitAndInstall(); }
     });
 
     if (app.isPackaged) autoUpdater.checkForUpdates().catch((e) => log('[updater]', e.message));
@@ -509,6 +561,7 @@ function buildMenu() {
             submenu: [
                 { label: 'Back up data now', click: backupNow },
                 { label: 'Restore a backup…', click: restoreBackup },
+                { label: 'Open backups folder', click: () => shell.openPath(BACKUPS) },
                 { type: 'separator' },
                 { label: 'Open data folder', click: () => shell.openPath(DATA) },
                 { label: 'Open logs folder', click: () => shell.openPath(LOGS) },
@@ -546,13 +599,14 @@ function buildMenu() {
         {
             label: 'Help',
             submenu: [
+                { label: 'User manual', accelerator: 'F1', click: () => baseUrl && mainWindow?.loadURL(baseUrl + '/help') },
                 { label: 'Check for updates', click: checkForUpdatesManually },
                 { type: 'separator' },
                 {
                     label: 'About ShopApp',
                     click: () => dialog.showMessageBox(mainWindow, {
                         message: `ShopApp ${app.getVersion()}`,
-                        detail: `Electron ${process.versions.electron}\nData: ${DATA}`,
+                        detail: `Developed by Mndima Technologies\n\nElectron ${process.versions.electron}\nData: ${DATA}`,
                     }),
                 },
             ],
@@ -694,6 +748,7 @@ async function boot() {
     watchDisplays();
     mainWindow.once('show', syncCustomerDisplay);
     setupAutoUpdates();
+    startBackupSchedule();
 }
 
 // ---------------------------------------------------------------- lifecycle
@@ -714,5 +769,22 @@ if (!app.requestSingleInstanceLock()) {
     }));
 
     app.on('window-all-closed', () => app.quit());
-    app.on('before-quit', () => { quitting = true; stopServer(); });
+    app.on('before-quit', (event) => {
+        // Backup on close (Settings → Backups), once, while the window is already gone.
+        if (!skipCloseBackup && baseUrl && !quitting) {
+            skipCloseBackup = true;
+            event.preventDefault();
+            clearInterval(backupTimer);
+            mainWindow?.hide();
+            customerWindow?.destroy();
+            Promise.resolve(backupRunning)
+                .then(() => laravelBackup('--on-close'))
+                .then((dest) => dest && log('Backup on close written', dest))
+                .catch((e) => log('Backup on close failed:', e.message))
+                .finally(() => app.quit());
+            return;
+        }
+        quitting = true;
+        stopServer();
+    });
 }

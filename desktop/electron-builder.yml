@@ -1,6 +1,6 @@
 appId: com.shopapp.desktop
 productName: ShopApp
-copyright: Copyright © ShopApp
+copyright: Copyright © Mndima Technologies
 
 directories:
   output: dist
@@ -34,6 +34,8 @@ nsis:
   createDesktopShortcut: true
   # Shop data (database, backups) lives in %APPDATA%\ShopApp and is kept.
   deleteAppDataOnUninstall: false
+  # Deletes the installer once ShopApp is installed (kept on USB/network drives or with /KEEP).
+  include: resources/installer.nsh
 
 # With GH_TOKEN set, `npm run release` uploads the installer + latest.yml here; the app checks for updates.
 # Builds always run locally.

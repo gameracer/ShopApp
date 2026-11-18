@@ -6,11 +6,12 @@ use App\Models\Customer;
 use App\Models\Expense;
 use App\Models\Product;
 use App\Models\Sale;
+use App\Services\ReportService;
 use Illuminate\Http\Request;
 
 class DashboardController extends Controller
 {
-    public function __invoke(Request $request)
+    public function __invoke(Request $request, ReportService $reports)
     {
         $user = $request->user();
         $today = Sale::query()
@@ -43,6 +44,7 @@ class DashboardController extends Controller
 
         return view('dashboard', [
             'stats' => $stats,
+            'trend' => $user->isOwner() ? $reports->salesTrend() : null,
             'nearExpiry' => Product::nearExpiry()->orderBy('expiry_date')->limit(8)->get(),
             'lowStock' => Product::lowStock()->orderBy('quantity')->limit(8)->get(),
             'recentSales' => Sale::with('customer', 'user')
