@@ -6,6 +6,7 @@ use App\Http\Middleware\SetLocale;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
+use Illuminate\Http\Exceptions\PostTooLargeException;
 use Illuminate\Http\Request;
 
 $app = Application::configure(basePath: dirname(__DIR__))
@@ -31,6 +32,16 @@ $app = Application::configure(basePath: dirname(__DIR__))
         $exceptions->shouldRenderJsonWhen(
             fn (Request $request) => $request->is('api/*') || $request->expectsJson(),
         );
+
+        // An upload bigger than PHP's post_max_size arrives empty: send the user
+        // back with a clear message instead of an error page.
+        $exceptions->render(function (PostTooLargeException $e, Request $request) {
+            if ($request->expectsJson()) {
+                return null;
+            }
+
+            return back()->withErrors(['file' => __('The file is too large to upload.')]);
+        });
     })->create();
 
 // The desktop app keeps writable data (logs, sessions, compiled views) outside

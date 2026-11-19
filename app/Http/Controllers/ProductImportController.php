@@ -12,6 +12,7 @@ class ProductImportController extends Controller
     {
         return view('products.import', [
             'columns' => ProductImporter::COLUMNS,
+            'maxFileKb' => ProductImporter::MAX_FILE_KB,
             'result' => session('import_result'),
         ]);
     }
@@ -19,8 +20,11 @@ class ProductImportController extends Controller
     public function store(Request $request, ProductImporter $importer)
     {
         $request->validate([
-            'file' => ['required', 'file', 'mimes:csv,txt', 'max:5120'],
-        ], [], ['file' => __('CSV file')]);
+            'file' => ['required', 'file', 'mimes:csv,txt', 'max:'.ProductImporter::MAX_FILE_KB],
+        ], [
+            'file.max' => __('The CSV file must not be larger than :size MB.', ['size' => ProductImporter::MAX_FILE_KB / 1024]),
+            'file.uploaded' => __('The CSV file could not be uploaded. It must not be larger than :size MB.', ['size' => ProductImporter::MAX_FILE_KB / 1024]),
+        ], ['file' => __('CSV file')]);
 
         try {
             $result = $importer->import($request->file('file')->getRealPath(), $request->user());

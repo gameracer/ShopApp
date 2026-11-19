@@ -96,6 +96,58 @@ class ProductImportTest extends TestCase
         $this->assertSame(0, Product::count());
     }
 
+    public function test_files_up_to_15_mb_are_accepted_and_larger_ones_rejected(): void
+    {
+        $owner = User::factory()->owner()->create();
+
+        $ok = UploadedFile::fake()->createWithContent('ok.csv', "name,buying_price,selling_price\nSalt,1,2\n");
+        $this->actingAs($owner)->post('/products/import', ['file' => $ok])->assertSessionHasNoErrors();
+
+        $big = UploadedFile::fake()->create('big.csv', 15 * 1024 + 1, 'text/csv');
+        $this->actingAs($owner)->from('/products/import')
+            ->post('/products/import', ['file' => $big])
+            ->assertRedirect('/products/import')
+            ->assertSessionHasErrors('file');
+    }
+
+    public function test_large_import_caps_the_skipped_list_but_counts_everything(): void
+    {
+        $owner = User::factory()->owner()->create();
+
+        $csv = "name,buying_price,selling_price,tags\n";
+        for ($i = 1; $i <= 1200; $i++) {
+            $csv .= "Item {$i},1,2,bulk;test\n";
+        }
+        for ($i = 1; $i <= 700; $i++) {
+            $csv .= "Item {$i},1,2,\n"; // duplicates of rows above
+        }
+
+        $this->actingAs($owner)->post('/products/import', ['file' => $this->csv($csv)])->assertSessionHasNoErrors();
+
+        $result = session('import_result');
+        $this->assertSame(1200, $result['imported']);
+        $this->assertSame(700, $result['skipped_total']);
+        $this->assertCount(\App\Support\ProductImporter::MAX_SKIPPED_LISTED, $result['skipped']);
+        $this->assertSame(2, \App\Models\Tag::count());
+        $this->assertSame(1200, Product::count());
+    }
+
+    public function test_too_many_rows_rolls_back_the_whole_import(): void
+    {
+        $owner = User::factory()->owner()->create();
+
+        $csv = "name,buying_price,selling_price\n";
+        for ($i = 1; $i <= \App\Support\ProductImporter::MAX_ROWS + 1; $i++) {
+            $csv .= "P{$i},1,2\n";
+        }
+
+        $this->actingAs($owner)->from('/products/import')
+            ->post('/products/import', ['file' => $this->csv($csv)])
+            ->assertSessionHasErrors('file');
+
+        $this->assertSame(0, Product::count());
+    }
+
     public function test_sellers_cannot_import(): void
     {
         $seller = User::factory()->seller()->create();
