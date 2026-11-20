@@ -1,0 +1,24 @@
+{
+    "name": "shopapp-desktop",
+    "productName": "ShopApp",
+    "version": "1.2.3",
+    "description": "ShopApp shop management system for Windows",
+    "author": "Mndima Technologies",
+    "license": "MIT",
+    "private": true,
+    "main": "main.js",
+    "scripts": {
+        "build:app": "node scripts/prepare.mjs",
+        "start": "electron .",
+        "dev": "npm run build:app && electron .",
+        "dist": "npm run build:app && electron-builder --win --publish never",
+        "release": "node scripts/release.mjs"
+    },
+    "devDependencies": {
+        "electron": "^45.3.0",
+        "electron-builder": "^26.18.0"
+    },
+    "dependencies": {
+        "electron-updater": "^6.8.11"
+    }
+}

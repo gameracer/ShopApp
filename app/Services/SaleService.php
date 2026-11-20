@@ -16,10 +16,11 @@ class SaleService
      * Record a sale, deduct stock and register any initial payment.
      *
      * @param  array<int, array{product_id:int, quantity:float|string, unit_price?:float|string|null}>  $items
+     * @param  array<int, array{method:string, amount:float|string}>  $split  amounts per method when $method is 'split'
      */
-    public function create(User $user, array $items, string $method, float $amountPaid, ?Customer $customer = null, ?string $dueDate = null): Sale
+    public function create(User $user, array $items, string $method, float $amountPaid, ?Customer $customer = null, ?string $dueDate = null, array $split = []): Sale
     {
-        return DB::transaction(function () use ($user, $items, $method, $amountPaid, $customer, $dueDate) {
+        return DB::transaction(function () use ($user, $items, $method, $amountPaid, $customer, $dueDate, $split) {
             $products = Product::whereIn('id', collect($items)->pluck('product_id'))
                 ->lockForUpdate()
                 ->get()
@@ -75,7 +76,12 @@ class SaleService
             }
 
             $total = round($total, 2);
-            $paid = $method === 'credit' ? min(max($amountPaid, 0), $total) : $total;
+            $received = $method === 'split' ? $this->splitPayments($split, $total) : null;
+            $paid = match ($method) {
+                'credit' => min(max($amountPaid, 0), $total),
+                'split' => round(array_sum($received), 2),
+                default => $total,
+            };
 
             if ($paid < $total && ! $customer) {
                 throw ValidationException::withMessages([
@@ -97,7 +103,16 @@ class SaleService
 
             $sale->items()->createMany($lines);
 
-            if ($paid > 0) {
+            if ($received !== null) {
+                foreach ($received as $via => $amount) {
+                    $sale->payments()->create([
+                        'user_id' => $user->id,
+                        'amount' => $amount,
+                        'method' => $via,
+                        'paid_at' => now(),
+                    ]);
+                }
+            } elseif ($paid > 0) {
                 $sale->payments()->create([
                     'user_id' => $user->id,
                     'amount' => $paid,
@@ -109,6 +124,35 @@ class SaleService
 
             return $sale;
         });
+    }
+
+    /**
+     * Amount kept per method for a split payment. Change for paying too much
+     * comes out of the cash part, so only cash can be overpaid.
+     *
+     * @return array<string, float>
+     */
+    private function splitPayments(array $split, float $total): array
+    {
+        $amounts = [];
+        foreach ($split as $row) {
+            $amount = round((float) ($row['amount'] ?? 0), 2);
+            if ($amount > 0) {
+                $amounts[$row['method']] = round(($amounts[$row['method']] ?? 0) + $amount, 2);
+            }
+        }
+
+        $change = round(array_sum($amounts) - $total, 2);
+        if ($change > 0) {
+            if ($change > ($amounts['cash'] ?? 0)) {
+                throw ValidationException::withMessages([
+                    'payments' => __('The amounts are more than the total. Only cash can be paid over the total (change is given in cash).'),
+                ]);
+            }
+            $amounts['cash'] = round($amounts['cash'] - $change, 2);
+        }
+
+        return array_filter($amounts, fn ($a) => $a > 0);
     }
 
     /**

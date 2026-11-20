@@ -73,4 +73,38 @@ class ExpenseAndReportTest extends TestCase
 
         Carbon::setTestNow();
     }
+
+    public function test_owner_dashboard_charts_daily_monthly_and_yearly_sales(): void
+    {
+        $owner = User::factory()->owner()->create();
+        $product = Product::factory()->create(['quantity' => 100, 'selling_price' => 1000]);
+        $service = app(SaleService::class);
+
+        foreach (['2024-06-01 10:00:00' => 4, '2026-03-15 09:00:00' => 3, '2026-11-02 09:00:00' => 2, '2026-11-10 08:00:00' => 1, '2026-11-10 11:00:00' => 5] as $at => $qty) {
+            Carbon::setTestNow($at);
+            $service->create($owner, [['product_id' => $product->id, 'quantity' => $qty]], 'cash', 0);
+        }
+        Carbon::setTestNow('2026-11-10 12:00:00');
+
+        $trend = $this->actingAs($owner)->get('/')->assertOk()->assertSee('salesChart', false)->viewData('trend');
+
+        // Last 30 days, ending today; empty days kept as zero.
+        $this->assertCount(30, $trend['daily']);
+        $this->assertEquals(['total' => 6000, 'count' => 2], array_intersect_key(end($trend['daily']), ['total' => 1, 'count' => 1]));
+        $this->assertEquals(8000, collect($trend['daily'])->sum('total'));
+
+        // Last 12 months: Dec 2025 .. Nov 2026.
+        $this->assertCount(12, $trend['monthly']);
+        $this->assertEquals(8000, end($trend['monthly'])['total']);
+        $this->assertEquals(3000, $trend['monthly'][3]['total'], 'March 2026');
+
+        // Every year since the first sale (at least five).
+        $this->assertSame(['2022', '2023', '2024', '2025', '2026'], array_column($trend['yearly'], 'label'));
+        $this->assertEquals([0, 0, 4000, 0, 11000], array_column($trend['yearly'], 'total'));
+
+        // Sellers get their launcher, with no shop-wide chart.
+        $this->actingAs(User::factory()->seller()->create())->get('/')->assertOk()->assertDontSee('salesChart', false);
+
+        Carbon::setTestNow();
+    }
 }

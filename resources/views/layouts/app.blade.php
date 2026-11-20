@@ -4,6 +4,15 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
+    {{-- Barcode scanner / receipt printer settings for resources/js/devices.js --}}
+    <meta name="shop-devices" content="{{ json_encode([
+        'lookupUrl' => route('products.barcode'),
+        'beep' => \App\Models\Setting::get('scanner_beep') === '1',
+        'i18n' => [
+            'preview' => __('Receipt preview'), 'print' => __('Print'), 'close' => __('Close'),
+            'printing' => __('Printing…'), 'failed' => __('Printing failed'),
+        ],
+    ]) }}">
     <title>@yield('title', __('Dashboard')) · {{ $shopName ?? config('app.name') }}</title>
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
@@ -28,8 +37,68 @@
             ['route' => 'settings.edit', 'match' => 'settings.*', 'icon' => 'cog', 'label' => __('Settings')],
         ]);
     }
+    $nav[] = ['route' => 'help', 'match' => 'help', 'icon' => 'help', 'label' => __('Help')];
 @endphp
 
+@if ($user->isSeller())
+{{-- Sellers: a till-style panel with a slim top bar and only the screens they need. --}}
+@php
+    $sellerNav = [
+        ['route' => 'dashboard', 'match' => 'dashboard', 'icon' => 'home', 'label' => __('Home')],
+        ['route' => 'sales.create', 'match' => 'sales.create', 'icon' => 'cart', 'label' => __('Sell')],
+        ['route' => 'sales.index', 'match' => 'sales.index|sales.show', 'icon' => 'receipt', 'label' => __('My sales')],
+        ['route' => 'credit.index', 'match' => 'credit.*|customers.*', 'icon' => 'credit', 'label' => __('Credit buyers')],
+    ];
+@endphp
+<div class="flex min-h-screen flex-col">
+    <header class="no-print sticky top-0 z-20 flex items-center gap-2 bg-slate-900 px-2 py-1.5 text-white sm:px-3">
+        <a href="{{ route('dashboard') }}" class="flex shrink-0 items-center gap-2 pr-1">
+            <span class="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-600"><x-icon name="cart" /></span>
+            <span class="hidden max-w-40 truncate font-semibold lg:block">{{ $shopName }}</span>
+        </a>
+        <nav class="flex min-w-0 flex-1 gap-1 overflow-x-auto">
+            @foreach ($sellerNav as $item)
+                <a href="{{ route($item['route']) }}" title="{{ $item['label'] }}"
+                   @class(['panel-tab', 'active' => request()->routeIs(...explode('|', $item['match']))])>
+                    <x-icon :name="$item['icon']" class="h-5 w-5 shrink-0" /> <span class="hidden sm:inline">{{ $item['label'] }}</span>
+                </a>
+            @endforeach
+        </nav>
+        <a href="{{ route('alerts') }}" class="relative rounded-lg p-2 text-slate-300 hover:bg-slate-800 hover:text-white" title="{{ __('Alerts') }}">
+            <x-icon name="bell" />
+            @if (($alertCount ?? 0) > 0)
+                <span class="absolute -top-0.5 -right-0.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-rose-600 px-1 text-[10px] font-bold text-white">{{ $alertCount > 99 ? '99+' : $alertCount }}</span>
+            @endif
+        </a>
+        <div x-data="{ open: false }" class="relative">
+            <button @click="open = !open" class="flex items-center gap-2 rounded-lg px-1.5 py-1 hover:bg-slate-800">
+                <span class="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-600 text-sm font-semibold">{{ mb_strtoupper(mb_substr($user->name, 0, 1)) }}</span>
+                <span class="hidden max-w-28 truncate text-sm md:block">{{ $user->name }}</span>
+            </button>
+            <div x-cloak x-show="open" @click.outside="open = false" class="absolute right-0 mt-2 w-56 rounded-lg border border-slate-200 bg-white py-1 text-slate-800 shadow-lg">
+                <a href="{{ route('products.index') }}" class="block px-4 py-2 text-sm hover:bg-slate-50">{{ __('Products') }}</a>
+                <a href="{{ route('customers.index') }}" class="block px-4 py-2 text-sm hover:bg-slate-50">{{ __('Customers') }}</a>
+                <a href="{{ route('profile.edit') }}" class="block px-4 py-2 text-sm hover:bg-slate-50">{{ __('My profile') }}</a>
+                <a href="{{ route('help') }}" class="block px-4 py-2 text-sm hover:bg-slate-50">{{ __('Help') }}</a>
+                <div class="px-4 py-2"><x-lang-switch /></div>
+                <form method="POST" action="{{ route('logout') }}" class="border-t border-slate-100">
+                    @csrf
+                    <button class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-rose-600 hover:bg-slate-50"><x-icon name="logout" class="h-4 w-4" /> {{ __('Log out') }}</button>
+                </form>
+                <div class="border-t border-slate-100 px-4 pt-2 pb-1 text-xs text-slate-400">
+                    <x-app-version class="block" />
+                    <x-credit class="block" />
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main @class(['w-full flex-1', 'p-2 sm:p-3' => View::hasSection('panel'), 'mx-auto max-w-7xl p-4 sm:p-6' => ! View::hasSection('panel')])>
+        @include('layouts._flash')
+        @yield('content')
+    </main>
+</div>
+@else
 <div class="flex min-h-screen">
     {{-- Sidebar --}}
     <div x-cloak x-show="menu" x-transition.opacity class="no-print fixed inset-0 z-30 bg-slate-900/50 lg:hidden" @click="menu = false"></div>
@@ -50,8 +119,12 @@
                 </a>
             @endforeach
         </nav>
-        <div class="border-t border-slate-800 p-4 text-xs text-slate-400">
-            <x-lang-switch :dark="true" />
+        <div class="space-y-2 border-t border-slate-800 p-4 text-xs text-slate-400">
+            <div class="flex items-center justify-between gap-2">
+                <x-lang-switch :dark="true" />
+                <x-app-version class="text-slate-500" />
+            </div>
+            <x-credit class="block text-slate-500" />
         </div>
     </aside>
 
@@ -83,6 +156,7 @@
                     </button>
                     <div x-cloak x-show="open" @click.outside="open = false" class="absolute right-0 mt-2 w-48 rounded-lg border border-slate-200 bg-white py-1 shadow-lg">
                         <a href="{{ route('profile.edit') }}" class="block px-4 py-2 text-sm hover:bg-slate-50">{{ __('My profile') }}</a>
+                        <a href="{{ route('help') }}" class="block px-4 py-2 text-sm hover:bg-slate-50">{{ __('Help') }}</a>
                         <form method="POST" action="{{ route('logout') }}">
                             @csrf
                             <button class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-rose-600 hover:bg-slate-50"><x-icon name="logout" class="h-4 w-4" /> {{ __('Log out') }}</button>
@@ -92,21 +166,12 @@
             </div>
         </header>
 
-        <main class="mx-auto w-full max-w-7xl flex-1 p-4 sm:p-6">
-            @if (session('success'))
-                <div x-data="{ show: true }" x-show="show" x-init="setTimeout(() => show = false, 5000)" class="no-print mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{{ session('success') }}</div>
-            @endif
-            @if ($errors->any())
-                <div class="no-print mb-4 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
-                    <ul class="list-inside list-disc">
-                        @foreach ($errors->all() as $error)<li>{{ $error }}</li>@endforeach
-                    </ul>
-                </div>
-            @endif
-
+        <main @class(['w-full flex-1', 'p-2 sm:p-3' => View::hasSection('panel'), 'mx-auto max-w-7xl p-4 sm:p-6' => ! View::hasSection('panel')])>
+            @include('layouts._flash')
             @yield('content')
         </main>
     </div>
 </div>
+@endif
 </body>
 </html>

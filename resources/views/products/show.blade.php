@@ -5,8 +5,10 @@
 @php $isOwner = auth()->user()->isOwner(); @endphp
 <x-page-header :title="$product->name" :subtitle="$product->sku">
     <x-slot:actions>
-        <a href="{{ route('stock.create', ['product' => $product->id]) }}" class="btn-primary"><x-icon name="truck" class="h-4 w-4" /> {{ __('Add stock') }}</a>
-        @if ($isOwner)<a href="{{ route('products.edit', $product) }}" class="btn-secondary">{{ __('Edit') }}</a>@endif
+        @if ($isOwner)
+            <a href="{{ route('stock.create', ['product' => $product->id]) }}" class="btn-primary"><x-icon name="truck" class="h-4 w-4" /> {{ __('Add stock') }}</a>
+            <a href="{{ route('products.edit', $product) }}" class="btn-secondary">{{ __('Edit') }}</a>
+        @endif
     </x-slot:actions>
 </x-page-header>
 

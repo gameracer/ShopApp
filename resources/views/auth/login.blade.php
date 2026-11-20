@@ -30,6 +30,7 @@
             <button class="btn-primary w-full">{{ __('Log in') }}</button>
             <div class="flex justify-center"><x-lang-switch /></div>
         </form>
+        <p class="mt-4 text-center text-xs text-slate-400"><x-app-version /> · <x-credit /></p>
     </div>
 </body>
 </html>

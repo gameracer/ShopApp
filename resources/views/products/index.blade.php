@@ -5,8 +5,9 @@
 @php $isOwner = auth()->user()->isOwner(); @endphp
 <x-page-header :title="__('Products')" :subtitle="trans_choice(':count product|:count products', $products->total())">
     <x-slot:actions>
-        <a href="{{ route('stock.create') }}" class="btn-secondary"><x-icon name="truck" class="h-4 w-4" /> {{ __('Add stock') }}</a>
         @if ($isOwner)
+            <a href="{{ route('stock.create') }}" class="btn-secondary"><x-icon name="truck" class="h-4 w-4" /> {{ __('Add stock') }}</a>
+            <a href="{{ route('products.import') }}" class="btn-secondary"><x-icon name="download" class="h-4 w-4 rotate-180" /> {{ __('Import') }}</a>
             <a href="{{ route('products.create') }}" class="btn-primary"><x-icon name="plus" class="h-4 w-4" /> {{ __('New product') }}</a>
         @endif
     </x-slot:actions>
@@ -79,8 +80,8 @@
                 </td>
                 <td>@include('products._expiry', ['product' => $product])</td>
                 <td class="text-right whitespace-nowrap">
-                    <a href="{{ route('stock.create', ['product' => $product->id]) }}" class="btn-secondary btn-sm" title="{{ __('Add stock') }}"><x-icon name="plus" class="h-3.5 w-3.5" /></a>
                     @if ($isOwner)
+                        <a href="{{ route('stock.create', ['product' => $product->id]) }}" class="btn-secondary btn-sm" title="{{ __('Add stock') }}"><x-icon name="plus" class="h-3.5 w-3.5" /></a>
                         <a href="{{ route('products.edit', $product) }}" class="btn-secondary btn-sm">{{ __('Edit') }}</a>
                     @endif
                 </td>
