@@ -13,7 +13,7 @@ ShopApp has two kinds of user:
 | What you can do | Owner | Seller |
 |---|:---:|:---:|
 | Sell at the till, see your own sales, print receipts | ✅ | ✅ |
-| Add stock received | ✅ (can also change prices) | ✅ (quantity and expiry only) |
+| Add stock received | ✅ | ❌ |
 | Customers, credit buyers, record repayments | ✅ | ✅ |
 | See alerts (expiry, low stock, overdue credit) | ✅ | ✅ |
 | Create, edit and delete products and tags | ✅ | ❌ |
@@ -62,12 +62,11 @@ The buttons at the top right, **New sale** and **Add stock**, take you straight 
 Sellers get a simple screen of big buttons, made for touch screens:
 
 - **Sell**: open the till.
-- **Restock**: record goods received.
 - **Credit customers**: who owes money, and record repayments.
 - **My sales**: your receipts, and reprinting them.
 - **Customers**, **Products** (check prices and stock) and **Alerts**.
 
-The red and amber badges count low-stock items, customers who owe money and alerts. *My sales today* shows your total so far. The bar at the top (*Home*, *Sell*, *My sales*, *Credit buyers*, *Add stock*) is always there.
+The red and amber badges count low-stock items, customers who owe money and alerts. *My sales today* shows your total so far. The bar at the top (*Home*, *Sell*, *My sales*, *Credit buyers*) is always there.
 
 ![Seller home screen](../../public/manual/en/seller-home.webp)
 
@@ -177,10 +176,10 @@ Rows whose name already exists are skipped and listed, so you can fix them.
 
 ## Adding stock (goods received)
 
-When goods arrive, open **Add stock** (sellers: **Restock**):
+Only the owner can add stock. When goods arrive, open **Add stock**:
 
-1. Tap each product in the list on the left, or scan it. To receive something new, press **New product** first (owner).
-2. On the right, type the **Quantity** received and, if the batch has one, the **Expiry date**. The owner can also update the **Buying price** and **Selling price**.
+1. Tap each product in the list on the left, or scan it. To receive something new, press **New product** first.
+2. On the right, type the **Quantity** received and, if the batch has one, the **Expiry date**. You can also update the **Buying price** and **Selling price**.
 3. Optionally type the **Supplier**. The **Total cost** is shown.
 4. Press **Save stock**.
 
@@ -214,7 +213,7 @@ The **bell** at the top shows how many things need attention. The **Alerts** pag
 
 - **Expired items** still in stock: remove them from the shelf.
 - **Near expiry**: items expiring within the number of days set in *Settings* (30 by default).
-- **Low stock**: items at or below their reorder level. Press **Restock** to add stock.
+- **Low stock**: items at or below their reorder level. The owner can press **Restock** to add stock.
 - **Overdue credit**: invoices past their due date.
 
 ![Alerts](../../public/manual/en/alerts.webp)

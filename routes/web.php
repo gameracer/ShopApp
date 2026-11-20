@@ -56,10 +56,12 @@ Route::middleware('auth')->group(function () {
     Route::resource('products', ProductController::class)->except(['index', 'show'])->middleware('role:owner');
     Route::resource('products', ProductController::class)->only(['index', 'show']);
 
-    // Stock in (receiving goods)
-    Route::get('/stock', [StockController::class, 'index'])->name('stock.index');
-    Route::get('/stock/add', [StockController::class, 'create'])->name('stock.create');
-    Route::post('/stock', [StockController::class, 'store'])->name('stock.store');
+    // Stock in (receiving goods): owner only.
+    Route::middleware('role:owner')->group(function () {
+        Route::get('/stock', [StockController::class, 'index'])->name('stock.index');
+        Route::get('/stock/add', [StockController::class, 'create'])->name('stock.create');
+        Route::post('/stock', [StockController::class, 'store'])->name('stock.store');
+    });
 
     // Sales / point of sale
     Route::get('/sales', [SaleController::class, 'index'])->name('sales.index');

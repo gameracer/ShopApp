@@ -6,8 +6,6 @@
 @section('content')
 @php
     $cards = [
-        ['route' => 'stock.create', 'icon' => 'truck', 'label' => __('Restock'), 'hint' => __('Record goods received'),
-         'tone' => 'bg-sky-600 hover:bg-sky-700', 'badge' => $lowStock ? __(':count low on stock', ['count' => $lowStock]) : null],
         ['route' => 'credit.index', 'icon' => 'credit', 'label' => __('Credit customers'), 'hint' => money($stats['credit_outstanding']).' '.__('owed'),
          'tone' => 'bg-amber-500 hover:bg-amber-600', 'badge' => $debtors ? trans_choice(':count customer|:count customers', $debtors) : null],
         ['route' => 'sales.index', 'icon' => 'receipt', 'label' => __('My sales'), 'hint' => __('Receipts and reprints'),
@@ -15,9 +13,9 @@
         ['route' => 'customers.index', 'icon' => 'user', 'label' => __('Customers'), 'hint' => __('Add or find a customer'),
          'tone' => 'bg-teal-600 hover:bg-teal-700', 'badge' => null],
         ['route' => 'products.index', 'icon' => 'box', 'label' => __('Products'), 'hint' => __('Check prices and stock'),
-         'tone' => 'bg-slate-700 hover:bg-slate-800', 'badge' => null],
+         'tone' => 'bg-slate-700 hover:bg-slate-800', 'badge' => $lowStock ? __(':count low on stock', ['count' => $lowStock]) : null],
         ['route' => 'alerts', 'icon' => 'bell', 'label' => __('Alerts'), 'hint' => __('Expiry, low stock, overdue credit'),
-         'tone' => 'bg-rose-600 hover:bg-rose-700', 'badge' => ($alertCount ?? 0) > 0 ? $alertCount : null],
+         'tone' => 'bg-rose-600 hover:bg-rose-700', 'badge' => ($alertCount ?? 0) > 0 ? $alertCount : null, 'wide' => true],
     ];
 @endphp
 <div class="mx-auto flex max-w-6xl flex-col gap-3 lg:min-h-[calc(100dvh-5rem)]">
@@ -41,7 +39,7 @@
             <span class="text-sm text-white/80 lg:text-base">{{ __('Tap products or scan barcodes') }}</span>
         </a>
         @foreach ($cards as $card)
-            <a href="{{ route($card['route']) }}" @class(['home-card', $card['tone'], 'pt-9' => $card['badge']])>
+            <a href="{{ route($card['route']) }}" @class(['home-card', $card['tone'], 'pt-9' => $card['badge'], 'col-span-2' => $card['wide'] ?? false])>
                 @if ($card['badge'])
                     <span class="absolute top-2 right-2 rounded-full bg-white/95 px-2 py-0.5 text-xs font-bold text-slate-800">{{ $card['badge'] }}</span>
                 @endif

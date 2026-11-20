@@ -2,7 +2,6 @@
 @section('title', __('Stock history'))
 
 @section('content')
-@php $isOwner = auth()->user()->isOwner(); @endphp
 <x-page-header :title="__('Stock history')">
     <x-slot:actions>
         <a href="{{ route('stock.create') }}" class="btn-primary"><x-icon name="plus" class="h-4 w-4" /> {{ __('Add stock') }}</a>
@@ -16,17 +15,15 @@
 
 <div class="card overflow-x-auto">
     <table class="table">
-        <thead><tr><th>{{ __('Date') }}</th><th>{{ __('Product') }}</th><th class="text-right">{{ __('Quantity') }}</th>@if ($isOwner)<th class="text-right">{{ __('Buying price') }}</th><th class="text-right">{{ __('Total cost') }}</th>@endif<th>{{ __('Expiry') }}</th><th>{{ __('Supplier') }}</th><th>{{ __('By') }}</th></tr></thead>
+        <thead><tr><th>{{ __('Date') }}</th><th>{{ __('Product') }}</th><th class="text-right">{{ __('Quantity') }}</th><th class="text-right">{{ __('Buying price') }}</th><th class="text-right">{{ __('Total cost') }}</th><th>{{ __('Expiry') }}</th><th>{{ __('Supplier') }}</th><th>{{ __('By') }}</th></tr></thead>
         <tbody class="divide-y divide-slate-100">
         @forelse ($entries as $entry)
             <tr>
                 <td class="whitespace-nowrap">{{ $entry->created_at->format('d/m/Y H:i') }}</td>
                 <td>@if ($entry->product)<a href="{{ route('products.show', $entry->product) }}" class="hover:underline">{{ $entry->product->name }}</a>@endif</td>
                 <td class="text-right font-medium text-emerald-700">+{{ qty($entry->quantity) }} {{ $entry->product?->unit }}</td>
-                @if ($isOwner)
-                    <td class="text-right">{{ money($entry->buying_price, false) }}</td>
-                    <td class="text-right">{{ money($entry->buying_price * $entry->quantity, false) }}</td>
-                @endif
+                <td class="text-right">{{ money($entry->buying_price, false) }}</td>
+                <td class="text-right">{{ money($entry->buying_price * $entry->quantity, false) }}</td>
                 <td>{{ $entry->expiry_date?->format('d/m/Y') ?? '—' }}</td>
                 <td>{{ $entry->supplier ?? $entry->note ?? '—' }}</td>
                 <td class="text-slate-500">{{ $entry->user?->name }}</td>

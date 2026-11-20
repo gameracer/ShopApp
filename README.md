@@ -20,18 +20,18 @@ A shop management app built with **Laravel 13** and **Tailwind CSS 4** (with Alp
 
 Other details:
 - **Point of sale.** Use ↑/↓ and Enter to pick items or a barcode scanner, and the change due is worked out for cash sales. A sale can be paid by cash, mobile money, bank or credit, or **split** across cash, mobile and bank (change comes from the cash part, and anything left unpaid becomes credit). Every sale has a printable receipt. The customer is optional unless part of the bill is left unpaid.
-- **Seller panel.** Sellers log in to a home screen of big cards: **Sell**, **Restock**, **Credit customers**, **My sales**, **Customers**, **Products** and **Alerts**, with badges for low stock, debtors and alerts, and their sales today. A slim top bar (*Home*, *Sell*, *My sales*, *Credit buyers*, *Add stock*) replaces the sidebar. Products show as large tiles with category tabs; tap or scan to add. Pick the payment method, tap a cash amount, and press **Pay** (or **F9**). The till shows the change, prints the receipt if auto-print is on, and stays open for the next customer: tap *New sale*, press Enter, or just scan the next item. **F2** jumps to search. The customer field stays hidden unless part of the bill is left unpaid.
+- **Seller panel.** Sellers log in to a home screen of big cards: **Sell**, **Credit customers**, **My sales**, **Customers**, **Products** and **Alerts**, with badges for low stock, debtors and alerts, and their sales today. A slim top bar (*Home*, *Sell*, *My sales*, *Credit buyers*) replaces the sidebar. Products show as large tiles with category tabs; tap or scan to add. Pick the payment method, tap a cash amount, and press **Pay** (or **F9**). The till shows the change, prints the receipt if auto-print is on, and stays open for the next customer: tap *New sale*, press Enter, or just scan the next item. **F2** jumps to search. The customer field stays hidden unless part of the bill is left unpaid.
 - **Barcode scanner and receipt printer.** See [Hardware](#hardware-barcode-scanner--receipt-printer) below.
 - **Stock checks.** Stock goes down automatically on every sale. You cannot sell more than you have, and expired items cannot be sold.
 - **Deleting a sale (owner only)** puts its items back in stock.
-- **What sellers cannot do.** Sellers never see buying prices or profit, and cannot change prices. They can sell, add stock, and manage customers and credit.
+- **What sellers cannot do.** Sellers never see buying prices or profit, and cannot change prices or add stock. They can sell and manage customers and credit.
 
 ### Role permissions
 
 | Action | Owner | Seller |
 |--------|:-----:|:------:|
 | Sell (POS), view own sales, receipts | ✅ | ✅ |
-| Add stock received | ✅ (can update prices) | ✅ (quantity/expiry only) |
+| Add stock received | ✅ | ❌ |
 | Customers, credit buyers, record repayments | ✅ | ✅ |
 | See alerts (expiry / low stock / overdue) | ✅ | ✅ |
 | Create / edit / delete products and tags | ✅ | ❌ |

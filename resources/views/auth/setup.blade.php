@@ -69,7 +69,7 @@
                     <input type="checkbox" name="add_seller" value="1" x-model="addSeller" class="rounded border-slate-300 text-emerald-600">
                     {{ __('Add a seller account') }}
                 </label>
-                <p class="text-xs text-slate-500">{{ __('Sellers can sell, add stock and manage customers and credit. You can add more users later under Users.') }}</p>
+                <p class="text-xs text-slate-500">{{ __('Sellers can sell and manage customers and credit. You can add more users later under Users.') }}</p>
                 <div class="grid gap-3 sm:grid-cols-2" x-show="addSeller" x-cloak>
                     <div>
                         <label class="label" for="seller_name">{{ __('Name') }}</label>

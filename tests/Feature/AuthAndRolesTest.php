@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\Product;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -39,7 +40,7 @@ class AuthAndRolesTest extends TestCase
         $this->actingAs($seller)->get('/')->assertOk()
             ->assertSee('home-card', false)
             ->assertSee(route('sales.create'), false)
-            ->assertSee(route('stock.create'), false)
+            ->assertDontSee(route('stock.create'), false)
             ->assertSee(route('credit.index'), false)
             ->assertDontSee(__('Profit today'));
 
@@ -65,11 +66,15 @@ class AuthAndRolesTest extends TestCase
     {
         $seller = User::factory()->seller()->create();
 
-        foreach (['/reports', '/expenses', '/users', '/settings', '/tags', '/products/create'] as $url) {
+        foreach (['/reports', '/expenses', '/users', '/settings', '/tags', '/products/create', '/stock', '/stock/add'] as $url) {
             $this->actingAs($seller)->get($url)->assertForbidden();
         }
 
-        foreach (['/', '/products', '/sales/new', '/stock/add', '/credit', '/customers', '/alerts'] as $url) {
+        $product = Product::factory()->create(['quantity' => 5]);
+        $this->actingAs($seller)->post('/stock', ['items' => [['product_id' => $product->id, 'quantity' => 10]]])->assertForbidden();
+        $this->assertEquals(5, (float) $product->fresh()->quantity);
+
+        foreach (['/', '/products', '/sales/new', '/credit', '/customers', '/alerts'] as $url) {
             $this->actingAs($seller)->get($url)->assertOk();
         }
     }

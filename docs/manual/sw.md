@@ -13,7 +13,7 @@ ShopApp ina aina mbili za watumiaji:
 | Unachoweza kufanya | Mmiliki | Muuzaji |
 |---|:---:|:---:|
 | Kuuza kaunta, kuona mauzo yako, kuchapisha risiti | ✅ | ✅ |
-| Kuongeza mzigo uliopokelewa | ✅ (anaweza pia kubadilisha bei) | ✅ (idadi na tarehe ya kuisha tu) |
+| Kuongeza mzigo uliopokelewa | ✅ | ❌ |
 | Wateja, wanunuzi wa mkopo, kurekodi marejesho | ✅ | ✅ |
 | Kuona tahadhari (kuisha muda, mzigo mdogo, madeni yaliyopitiliza) | ✅ | ✅ |
 | Kuongeza, kuhariri na kufuta bidhaa na lebo | ✅ | ❌ |
@@ -62,12 +62,11 @@ Vitufe vya juu kulia, **Uza** na **Ongeza mzigo**, vinakupeleka moja kwa moja kw
 Muuzaji anapata skrini rahisi yenye vitufe vikubwa, iliyotengenezwa kwa skrini za kugusa:
 
 - **Uza**: fungua kaunta.
-- **Ongeza mzigo**: rekodi mzigo uliopokelewa.
 - **Wateja wa mkopo**: nani anadaiwa, na kurekodi marejesho.
 - **Mauzo yangu**: risiti zako, na kuzichapisha tena.
 - **Wateja**, **Bidhaa** (angalia bei na stoo) na **Tahadhari**.
 
-Alama nyekundu na za njano zinahesabu bidhaa zenye mzigo mdogo, wateja wanaodaiwa na tahadhari. *Mauzo yangu leo* inaonyesha jumla yako mpaka sasa. Upau wa juu (*Mwanzo*, *Uza*, *Mauzo yangu*, *Wanunuzi wa mkopo*, *Ongeza mzigo*) upo muda wote.
+Alama nyekundu na za njano zinahesabu bidhaa zenye mzigo mdogo, wateja wanaodaiwa na tahadhari. *Mauzo yangu leo* inaonyesha jumla yako mpaka sasa. Upau wa juu (*Mwanzo*, *Uza*, *Mauzo yangu*, *Wanunuzi wa mkopo*) upo muda wote.
 
 ![Skrini ya mwanzo ya muuzaji](../../public/manual/sw/seller-home.webp)
 
@@ -177,10 +176,10 @@ Mistari ambayo jina lake tayari lipo inarukwa na kuorodheshwa, ili uirekebishe.
 
 ## Kuongeza mzigo (mzigo uliopokelewa)
 
-Mzigo ukifika, fungua **Ongeza mzigo**:
+Mmiliki pekee ndiye anaweza kuongeza mzigo. Mzigo ukifika, fungua **Ongeza mzigo**:
 
-1. Gusa kila bidhaa kwenye orodha upande wa kushoto, au isome kwa skana. Kupokea kitu kipya, bonyeza **Bidhaa mpya** kwanza (mmiliki).
-2. Upande wa kulia, andika **Idadi** iliyopokelewa na, kama mzigo una tarehe, **Tarehe ya kuisha muda**. Mmiliki anaweza pia kubadilisha **Bei ya kununua** na **Bei ya kuuza**.
+1. Gusa kila bidhaa kwenye orodha upande wa kushoto, au isome kwa skana. Kupokea kitu kipya, bonyeza **Bidhaa mpya** kwanza.
+2. Upande wa kulia, andika **Idadi** iliyopokelewa na, kama mzigo una tarehe, **Tarehe ya kuisha muda**. Unaweza pia kubadilisha **Bei ya kununua** na **Bei ya kuuza**.
 3. Ukipenda, andika **Msambazaji**. **Jumla ya gharama** inaonyeshwa.
 4. Bonyeza **Hifadhi mzigo**.
 
@@ -214,7 +213,7 @@ Wateja wanaweza kulipa kidogo kidogo:
 
 - **Bidhaa zilizoisha muda** ambazo bado zipo stoo: ziondoe kwenye rafu.
 - **Karibu kuisha muda**: bidhaa zitakazoisha ndani ya siku zilizowekwa kwenye *Mipangilio* (30 kwa kawaida).
-- **Mzigo mdogo**: bidhaa zilizofika au kushuka chini ya kiwango cha kuagiza tena. Bonyeza **Ongeza mzigo** kuongeza.
+- **Mzigo mdogo**: bidhaa zilizofika au kushuka chini ya kiwango cha kuagiza tena. Mmiliki anaweza kubonyeza **Ongeza mzigo** kuongeza.
 - **Madeni yaliyopitiliza**: ankara zilizopita tarehe ya kulipa.
 
 ![Tahadhari](../../public/manual/sw/alerts.webp)

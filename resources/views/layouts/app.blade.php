@@ -48,7 +48,6 @@
         ['route' => 'sales.create', 'match' => 'sales.create', 'icon' => 'cart', 'label' => __('Sell')],
         ['route' => 'sales.index', 'match' => 'sales.index|sales.show', 'icon' => 'receipt', 'label' => __('My sales')],
         ['route' => 'credit.index', 'match' => 'credit.*|customers.*', 'icon' => 'credit', 'label' => __('Credit buyers')],
-        ['route' => 'stock.create', 'match' => 'stock.*', 'icon' => 'truck', 'label' => __('Add stock')],
     ];
 @endphp
 <div class="flex min-h-screen flex-col">

@@ -2,11 +2,10 @@
 @section('title', __('Add stock'))
 
 @section('content')
-@php $isOwner = auth()->user()->isOwner(); @endphp
 <x-page-header :title="__('Add stock')" :subtitle="__('Search items and register new stock received.')">
     <x-slot:actions>
         <a href="{{ route('stock.index') }}" class="btn-secondary">{{ __('Stock history') }}</a>
-        @if ($isOwner)<a href="{{ route('products.create') }}" class="btn-secondary"><x-icon name="plus" class="h-4 w-4" /> {{ __('New product') }}</a>@endif
+        <a href="{{ route('products.create') }}" class="btn-secondary"><x-icon name="plus" class="h-4 w-4" /> {{ __('New product') }}</a>
     </x-slot:actions>
 </x-page-header>
 
@@ -14,10 +13,9 @@
         'searchUrl' => route('products.search'),
         'storeUrl' => route('stock.store'),
         'currency' => \App\Support\Shop::currency(),
-        'canEditPrice' => $isOwner,
         'preselected' => $preselected ? [
             'id' => $preselected->id, 'name' => $preselected->name, 'unit' => $preselected->unit,
-            'quantity' => (float) $preselected->quantity, 'buying_price' => $isOwner ? (float) $preselected->buying_price : null,
+            'quantity' => (float) $preselected->quantity, 'buying_price' => (float) $preselected->buying_price,
             'selling_price' => (float) $preselected->selling_price,
         ] : null,
         'i18n' => [
@@ -47,14 +45,12 @@
                         <label class="text-xs text-slate-500">{{ __('Quantity') }}
                             <input type="number" step="0.01" min="0.01" x-model.number="line.quantity" class="input mt-0.5">
                         </label>
-                        @if ($isOwner)
-                            <label class="text-xs text-slate-500">{{ __('Buying price') }}
-                                <input type="number" step="0.01" min="0" x-model.number="line.buying_price" class="input mt-0.5">
-                            </label>
-                            <label class="text-xs text-slate-500">{{ __('Selling price') }}
-                                <input type="number" step="0.01" min="0" x-model.number="line.selling_price" class="input mt-0.5">
-                            </label>
-                        @endif
+                        <label class="text-xs text-slate-500">{{ __('Buying price') }}
+                            <input type="number" step="0.01" min="0" x-model.number="line.buying_price" class="input mt-0.5">
+                        </label>
+                        <label class="text-xs text-slate-500">{{ __('Selling price') }}
+                            <input type="number" step="0.01" min="0" x-model.number="line.selling_price" class="input mt-0.5">
+                        </label>
                         <label class="text-xs text-slate-500">{{ __('Expiry date') }}
                             <input type="date" x-model="line.expiry_date" class="input mt-0.5">
                         </label>
@@ -68,9 +64,7 @@
                     <label class="label">{{ __('Supplier') }}</label>
                     <input x-model="supplier" class="input" placeholder="{{ __('Optional') }}">
                 </div>
-                @if ($isOwner)
-                    <p class="text-sm text-slate-600">{{ __('Total cost') }}: <strong x-text="money(totalCost)"></strong></p>
-                @endif
+                <p class="text-sm text-slate-600">{{ __('Total cost') }}: <strong x-text="money(totalCost)"></strong></p>
                 <ul x-show="errorList.length" class="rounded-lg bg-rose-50 p-3 text-sm text-rose-700">
                     <template x-for="e in errorList"><li x-text="e"></li></template>
                 </ul>

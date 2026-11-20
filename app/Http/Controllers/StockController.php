@@ -37,8 +37,6 @@ class StockController extends Controller
      */
     public function store(Request $request)
     {
-        $isOwner = $request->user()->isOwner();
-
         $data = $request->validate([
             'supplier' => ['nullable', 'string', 'max:255'],
             'items' => ['required', 'array', 'min:1'],
@@ -49,13 +47,12 @@ class StockController extends Controller
             'items.*.expiry_date' => ['nullable', 'date'],
         ]);
 
-        DB::transaction(function () use ($data, $request, $isOwner) {
+        DB::transaction(function () use ($data, $request) {
             foreach ($data['items'] as $item) {
                 $product = Product::lockForUpdate()->findOrFail($item['product_id']);
 
-                // Only the owner may change prices while receiving stock.
-                $buying = $isOwner && isset($item['buying_price']) ? (float) $item['buying_price'] : (float) $product->buying_price;
-                $selling = $isOwner && isset($item['selling_price']) ? (float) $item['selling_price'] : (float) $product->selling_price;
+                $buying = isset($item['buying_price']) ? (float) $item['buying_price'] : (float) $product->buying_price;
+                $selling = isset($item['selling_price']) ? (float) $item['selling_price'] : (float) $product->selling_price;
 
                 $product->stockEntries()->create([
                     'user_id' => $request->user()->id,

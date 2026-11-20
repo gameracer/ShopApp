@@ -481,8 +481,8 @@ export function stockApp(config) {
                 items: this.lines.map((l) => ({
                     product_id: l.product_id,
                     quantity: l.quantity,
-                    buying_price: config.canEditPrice ? l.buying_price : null,
-                    selling_price: config.canEditPrice ? l.selling_price : null,
+                    buying_price: l.buying_price,
+                    selling_price: l.selling_price,
                     expiry_date: l.expiry_date || null,
                 })),
             });

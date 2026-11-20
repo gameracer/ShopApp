@@ -62,17 +62,17 @@ class ProductTest extends TestCase
 
     public function test_stock_in_increases_quantity_and_keeps_earliest_expiry(): void
     {
-        $seller = User::factory()->seller()->create();
+        $owner = User::factory()->owner()->create();
         $product = Product::factory()->create(['quantity' => 5, 'buying_price' => 100, 'selling_price' => 150, 'expiry_date' => now()->addDays(10)]);
 
-        $this->actingAs($seller)->postJson('/stock', [
+        $this->actingAs($owner)->postJson('/stock', [
             'supplier' => 'Wholesaler',
-            'items' => [['product_id' => $product->id, 'quantity' => 20, 'buying_price' => 1, 'selling_price' => 1, 'expiry_date' => now()->addDays(90)->toDateString()]],
+            'items' => [['product_id' => $product->id, 'quantity' => 20, 'expiry_date' => now()->addDays(90)->toDateString()]],
         ])->assertOk();
 
         $product->refresh();
         $this->assertEquals(25, $product->quantity);
-        $this->assertEquals(100, $product->buying_price, 'sellers cannot change prices');
+        $this->assertEquals(100, $product->buying_price, 'prices are kept when none are given');
         $this->assertSame(now()->addDays(10)->toDateString(), $product->expiry_date->toDateString());
     }
 
