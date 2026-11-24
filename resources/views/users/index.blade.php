@@ -2,7 +2,7 @@
 @section('title', __('Users'))
 
 @section('content')
-<x-page-header :title="__('Users')" :subtitle="__('Owners have full access. Sellers can sell, add stock and manage credit customers.')">
+<x-page-header :title="__('Users')" :subtitle="__('Owners have full access. Sellers can sell and manage credit customers.')">
     <x-slot:actions>
         <a href="{{ route('users.create') }}" class="btn-primary"><x-icon name="plus" class="h-4 w-4" /> {{ __('New user') }}</a>
     </x-slot:actions>

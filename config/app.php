@@ -67,6 +67,42 @@ return [
 
     'timezone' => 'UTC',
 
+    // The shop computer's own timezone (the desktop app passes Windows' zone), used for
+    // the backup schedule when none was saved in Settings → Backups.
+    'local_timezone' => env('SHOPAPP_TIMEZONE'),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Application Version
+    |--------------------------------------------------------------------------
+    |
+    | Shown with the creator's signature in the sidebar, the user menu and on the
+    | login page (resources/views/components/credit.blade.php). The desktop app
+    | passes its own version as APP_VERSION; otherwise the version released in
+    | desktop/package.json is used.
+    |
+    */
+
+    'creator' => 'Mndima Technologies',
+
+    'version' => env('APP_VERSION') ?: (function () {
+        $file = base_path('desktop/package.json');
+
+        return is_file($file) ? (json_decode((string) file_get_contents($file), true)['version'] ?? null) : null;
+    })(),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Backup Folder
+    |--------------------------------------------------------------------------
+    |
+    | Where database backups are written (see App\Services\BackupService).
+    | The desktop app sets SHOPAPP_BACKUP_PATH to %APPDATA%\ShopApp\backups.
+    |
+    */
+
+    'backup_path' => env('SHOPAPP_BACKUP_PATH', storage_path('app/backups')),
+
     /*
     |--------------------------------------------------------------------------
     | Application Locale Configuration

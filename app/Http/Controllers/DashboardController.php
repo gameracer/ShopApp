@@ -6,11 +6,12 @@ use App\Models\Customer;
 use App\Models\Expense;
 use App\Models\Product;
 use App\Models\Sale;
+use App\Services\ReportService;
 use Illuminate\Http\Request;
 
 class DashboardController extends Controller
 {
-    public function __invoke(Request $request)
+    public function __invoke(Request $request, ReportService $reports)
     {
         $user = $request->user();
         $today = Sale::query()
@@ -32,8 +33,18 @@ class DashboardController extends Controller
             'stock_value' => (float) Product::where('quantity', '>', 0)->selectRaw('SUM(quantity * buying_price) as v')->value('v'),
         ];
 
+        // Sellers get a launcher of big cards instead of the owner's figures.
+        if ($user->isSeller()) {
+            return view('seller-home', [
+                'stats' => $stats,
+                'lowStock' => Product::lowStock()->count(),
+                'debtors' => Customer::withBalance()->get()->filter(fn ($c) => $c->balance > 0)->count(),
+            ]);
+        }
+
         return view('dashboard', [
             'stats' => $stats,
+            'trend' => $user->isOwner() ? $reports->salesTrend() : null,
             'nearExpiry' => Product::nearExpiry()->orderBy('expiry_date')->limit(8)->get(),
             'lowStock' => Product::lowStock()->orderBy('quantity')->limit(8)->get(),
             'recentSales' => Sale::with('customer', 'user')

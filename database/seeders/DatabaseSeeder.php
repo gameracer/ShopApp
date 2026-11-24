@@ -12,6 +12,12 @@ class DatabaseSeeder extends Seeder
     {
         Setting::put(Setting::DEFAULTS);
 
+        // In production no accounts are created: the first visit opens the
+        // setup page (/setup), where the shop name, owner and seller are chosen.
+        if (app()->isProduction()) {
+            return;
+        }
+
         User::updateOrCreate(['email' => 'owner@shop.test'], [
             'name' => 'Shop Owner',
             'password' => 'password',
@@ -26,8 +32,6 @@ class DatabaseSeeder extends Seeder
             'locale' => 'sw',
         ]);
 
-        if (! app()->isProduction()) {
-            $this->call(DemoSeeder::class);
-        }
+        $this->call(DemoSeeder::class);
     }
 }

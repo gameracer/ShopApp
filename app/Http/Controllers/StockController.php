@@ -6,8 +6,8 @@ use App\Models\Product;
 use App\Models\StockEntry;
 use App\Models\Tag;
 use Illuminate\Http\Request;
-use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 
 class StockController extends Controller
 {
@@ -37,8 +37,6 @@ class StockController extends Controller
      */
     public function store(Request $request)
     {
-        $isOwner = $request->user()->isOwner();
-
         $data = $request->validate([
             'supplier' => ['nullable', 'string', 'max:255'],
             'items' => ['required', 'array', 'min:1'],
@@ -49,37 +47,18 @@ class StockController extends Controller
             'items.*.expiry_date' => ['nullable', 'date'],
         ]);
 
-        DB::transaction(function () use ($data, $request, $isOwner) {
+        DB::transaction(function () use ($data, $request) {
             foreach ($data['items'] as $item) {
                 $product = Product::lockForUpdate()->findOrFail($item['product_id']);
 
-                // Only the owner may change prices while receiving stock.
-                $buying = $isOwner && isset($item['buying_price']) ? (float) $item['buying_price'] : (float) $product->buying_price;
-                $selling = $isOwner && isset($item['selling_price']) ? (float) $item['selling_price'] : (float) $product->selling_price;
-
-                $product->stockEntries()->create([
-                    'user_id' => $request->user()->id,
-                    'quantity' => $item['quantity'],
-                    'buying_price' => $buying,
-                    'selling_price' => $selling,
-                    'expiry_date' => $item['expiry_date'] ?? null,
-                    'supplier' => $data['supplier'] ?? null,
-                ]);
-
-                // Keep the earliest expiry while older stock is still on the shelf,
-                // so near-expiry alerts are not hidden by a fresher batch.
-                if (! empty($item['expiry_date'])) {
-                    $newExpiry = Carbon::parse($item['expiry_date']);
-                    $hasOldStock = (float) $product->quantity > 0 && $product->expiry_date !== null;
-                    $product->expiry_date = $hasOldStock && $product->expiry_date->lt($newExpiry)
-                        ? $product->expiry_date
-                        : $newExpiry;
-                }
-
-                $product->quantity = round((float) $product->quantity + (float) $item['quantity'], 2);
-                $product->buying_price = $buying;
-                $product->selling_price = $selling;
-                $product->save();
+                $product->receiveStock(
+                    (float) $item['quantity'],
+                    isset($item['buying_price']) ? (float) $item['buying_price'] : (float) $product->buying_price,
+                    isset($item['selling_price']) ? (float) $item['selling_price'] : (float) $product->selling_price,
+                    $item['expiry_date'] ?? null,
+                    $request->user(),
+                    $data['supplier'] ?? null,
+                );
             }
         });
 
@@ -90,5 +69,40 @@ class StockController extends Controller
         }
 
         return redirect()->route('stock.index');
+    }
+
+    public function adjust(Product $product)
+    {
+        return view('stock.adjust', ['product' => $product, 'reasons' => StockEntry::adjustmentReasons()]);
+    }
+
+    /**
+     * Correct a product's stock to the quantity actually on the shelf, recording the
+     * difference (plus or minus) and the reason in the stock history.
+     */
+    public function storeAdjustment(Request $request, Product $product)
+    {
+        $data = $request->validate([
+            'quantity' => ['required', 'numeric', 'min:0'],
+            'reason' => ['required', 'string', Rule::in(array_keys(StockEntry::adjustmentReasons()))],
+            'note' => ['nullable', 'string', 'max:200'],
+        ]);
+
+        $changed = DB::transaction(function () use ($data, $request, $product) {
+            $product = Product::lockForUpdate()->findOrFail($product->id);
+            $reason = StockEntry::adjustmentReasons()[$data['reason']];
+
+            return $product->adjustStock(
+                (float) $data['quantity'],
+                $request->user(),
+                filled($data['note'] ?? null) ? $reason.': '.$data['note'] : $reason,
+            );
+        });
+
+        if (! $changed) {
+            return back()->withInput()->withErrors(['quantity' => __('The quantity is the same as the current stock.')]);
+        }
+
+        return redirect()->route('products.show', $product)->with('success', __('Stock adjusted.'));
     }
 }

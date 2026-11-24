@@ -30,7 +30,7 @@
                         <td><a href="{{ route('products.show', $product) }}" class="hover:underline">{{ $product->name }}</a></td>
                         <td class="text-right font-medium {{ $product->quantity <= 0 ? 'text-rose-600' : 'text-amber-700' }}">{{ qty($product->quantity) }} {{ $product->unit }}</td>
                         <td class="text-right">{{ qty($product->reorder_level) }}</td>
-                        <td class="text-right"><a href="{{ route('stock.create', ['product' => $product->id]) }}" class="btn-secondary btn-sm">{{ __('Restock') }}</a></td>
+                        <td class="text-right">@if (auth()->user()->isOwner())<a href="{{ route('stock.create', ['product' => $product->id]) }}" class="btn-secondary btn-sm">{{ __('Restock') }}</a>@endif</td>
                     </tr>
                 @empty
                     <tr><td colspan="4"><x-empty>{{ __('Stock levels look good.') }}</x-empty></td></tr>

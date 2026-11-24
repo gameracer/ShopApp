@@ -20,7 +20,8 @@
 
 <x-page-header :title="$titles[$period]" :subtitle="$subtitle.' · '.\App\Support\Shop::name()">
     <x-slot:actions>
-        <a href="{{ route('reports.export', request()->query()) }}" class="btn-secondary"><x-icon name="download" class="h-4 w-4" /> CSV</a>
+        <a href="{{ route('reports.export', ['format' => 'xlsx'] + request()->query()) }}" class="btn-secondary"><x-icon name="download" class="h-4 w-4" /> Excel</a>
+        <a href="{{ route('reports.export', ['format' => 'csv'] + request()->query()) }}" class="btn-secondary"><x-icon name="download" class="h-4 w-4" /> CSV</a>
         <button onclick="window.print()" class="btn-secondary"><x-icon name="print" class="h-4 w-4" /> {{ __('Print') }}</button>
     </x-slot:actions>
 </x-page-header>

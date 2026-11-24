@@ -31,6 +31,8 @@ class LocaleTest extends TestCase
 
     public function test_login_page_can_be_shown_in_swahili(): void
     {
+        \App\Models\User::factory()->create();
+
         $this->get('/locale/sw');
         $this->get('/login')->assertSee('Ingia');
     }

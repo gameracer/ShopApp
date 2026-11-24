@@ -20,6 +20,10 @@
     <x-stat icon="credit" tone="amber" :label="__('Credit outstanding')" :value="money($stats['credit_outstanding'])" />
 </div>
 
+@if ($trend)
+    @include('dashboard._sales-chart')
+@endif
+
 <div class="mt-6 grid grid-cols-1 gap-6 xl:grid-cols-3">
     <div class="card xl:col-span-2">
         <div class="card-header">

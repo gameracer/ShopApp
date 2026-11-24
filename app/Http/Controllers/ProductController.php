@@ -4,7 +4,9 @@ namespace App\Http\Controllers;
 
 use App\Models\Product;
 use App\Models\Tag;
+use Closure;
 use Illuminate\Http\Request;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 
@@ -46,10 +48,41 @@ class ProductController extends Controller
             ->when($request->boolean('in_stock'), fn ($q) => $q->where('quantity', '>', 0)
                 ->where(fn ($e) => $e->whereNull('expiry_date')->orWhereDate('expiry_date', '>=', today()->toDateString())))
             ->orderBy('name')
-            ->limit(30)
+            ->limit(min(100, max(1, $request->integer('limit', 30))))
             ->get();
 
-        return response()->json($products->map(fn (Product $p) => [
+        return response()->json($products->map(fn (Product $p) => $this->payload($p, $isOwner)));
+    }
+
+    /**
+     * Exact SKU / barcode lookup, used when a barcode scanner reads a code.
+     * JSON callers (POS, stock in) get the product or a 404; a plain visit
+     * opens the product, or offers the owner to create it when the code is unknown.
+     */
+    public function barcode(Request $request)
+    {
+        $code = trim((string) $request->query('code'));
+        $product = Product::findByBarcode($code)?->load('tags:id,name,color');
+
+        if ($request->expectsJson()) {
+            return $product
+                ? response()->json($this->payload($product, $request->user()->isOwner()))
+                : response()->json(['message' => __('No product has the barcode :code.', ['code' => $code])], 404);
+        }
+
+        if ($product) {
+            return redirect()->route('products.show', $product);
+        }
+
+        return $request->user()->isOwner() && $code !== ''
+            ? redirect()->route('products.create', ['sku' => $code])
+                ->with('success', __('No product has the barcode :code. Add it now.', ['code' => $code]))
+            : redirect()->route('products.index', ['q' => $code]);
+    }
+
+    private function payload(Product $p, bool $isOwner): array
+    {
+        return [
             'id' => $p->id,
             'name' => $p->name,
             'sku' => $p->sku,
@@ -58,13 +91,17 @@ class ProductController extends Controller
             'buying_price' => $isOwner ? (float) $p->buying_price : null,
             'quantity' => (float) $p->quantity,
             'expiry_date' => $p->expiry_date?->toDateString(),
+            'expired' => $p->isExpired(),
             'tags' => $p->tags->map(fn ($t) => ['id' => $t->id, 'name' => $t->name, 'color' => $t->color]),
-        ]));
+        ];
     }
 
-    public function create()
+    public function create(Request $request)
     {
-        return view('products.form', ['product' => new Product(['unit' => 'pcs']), 'tags' => Tag::orderBy('name')->get()]);
+        // ?sku= comes from scanning an unknown barcode.
+        $sku = trim((string) $request->query('sku')) ?: null;
+
+        return view('products.form', ['product' => new Product(['unit' => 'pcs', 'sku' => $sku]), 'tags' => Tag::orderBy('name')->get()]);
     }
 
     public function store(Request $request)
@@ -111,8 +148,14 @@ class ProductController extends Controller
 
     public function update(Request $request, Product $product)
     {
-        $product->update($this->validated($request, $product));
-        $product->tags()->sync($this->tagIds($request));
+        $data = $this->validated($request, $product);
+
+        DB::transaction(function () use ($data, $request, $product) {
+            // A quantity typed here is a stock correction, so it is recorded like one.
+            $product->fill(Arr::except($data, 'quantity'))->save();
+            $product->adjustStock((float) $data['quantity'], $request->user(), __('Changed on the product form'));
+            $product->tags()->sync($this->tagIds($request));
+        });
 
         return redirect()->route('products.show', $product)->with('success', __('Product saved.'));
     }
@@ -127,7 +170,11 @@ class ProductController extends Controller
     private function validated(Request $request, ?Product $product = null): array
     {
         return $request->validate([
-            'name' => ['required', 'string', 'max:255'],
+            'name' => ['required', 'string', 'max:255', function (string $attribute, mixed $value, Closure $fail) use ($product) {
+                if (is_string($value) && Product::nameTaken($value, $product?->id)) {
+                    $fail(__('A product with this name already exists.'));
+                }
+            }],
             'sku' => ['nullable', 'string', 'max:100', Rule::unique('products', 'sku')->ignore($product)],
             'unit' => ['required', 'string', 'max:30'],
             'buying_price' => ['required', 'numeric', 'min:0'],
@@ -149,17 +196,10 @@ class ProductController extends Controller
     {
         $ids = array_map('intval', (array) $request->input('tags', []));
 
-        foreach (explode(',', (string) $request->input('new_tags')) as $name) {
-            $name = trim($name);
-            if ($name !== '') {
-                $ids[] = Tag::firstOrCreate(
-                    ['name' => mb_strtolower($name)],
-                    ['color' => Tag::COLORS[array_rand(Tag::COLORS)]]
-                )->id;
-            }
-        }
-
-        return array_values(array_unique($ids));
+        return array_values(array_unique([
+            ...$ids,
+            ...Tag::idsForNames(explode(',', (string) $request->input('new_tags'))),
+        ]));
     }
 
     private function sortColumn(Request $request): string

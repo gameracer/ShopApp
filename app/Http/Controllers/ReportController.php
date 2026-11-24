@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\User;
 use App\Services\ReportService;
+use App\Support\ReportWorkbook;
 use Illuminate\Http\Request;
 
 class ReportController extends Controller
@@ -26,13 +27,25 @@ class ReportController extends Controller
         ]);
     }
 
-    public function export(Request $request)
+    public function export(Request $request, ReportWorkbook $workbook)
     {
         [$period, $date, $sellerId] = $this->params($request);
         [$start, $end] = $this->reports->range($period, $date);
         $report = $this->reports->build($period, $start, $end, $sellerId);
 
-        $filename = sprintf('report-%s-%s.csv', $period, $start->format($period === 'yearly' ? 'Y' : ($period === 'monthly' ? 'Y-m' : 'Y-m-d')));
+        $filename = sprintf('report-%s-%s', $period, $start->format($period === 'yearly' ? 'Y' : ($period === 'monthly' ? 'Y-m' : 'Y-m-d')));
+
+        if ($request->query('format') === 'xlsx') {
+            $path = tempnam(sys_get_temp_dir(), 'shopapp-report-');
+            $sellerName = $sellerId ? User::whereKey($sellerId)->value('name') : null;
+            $workbook->write($path, $period, $start, $end, $sellerId, $sellerName, $report);
+
+            return response()->download($path, $filename.'.xlsx', [
+                'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            ])->deleteFileAfterSend();
+        }
+
+        $filename .= '.csv';
 
         return response()->streamDownload(function () use ($report) {
             $out = fopen('php://output', 'w');

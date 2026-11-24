@@ -22,6 +22,21 @@ class StockEntry extends Model
         ];
     }
 
+    /**
+     * Why stock was corrected by hand, keyed by the value the adjustment form sends.
+     */
+    public static function adjustmentReasons(): array
+    {
+        return [
+            'mistake' => __('Entered by mistake'),
+            'count' => __('Stock count'),
+            'damaged' => __('Damaged'),
+            'expired' => __('Expired'),
+            'lost' => __('Lost or stolen'),
+            'other' => __('Other'),
+        ];
+    }
+
     public function product(): BelongsTo
     {
         return $this->belongsTo(Product::class);

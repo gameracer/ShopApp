@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\Product;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -12,6 +13,8 @@ class AuthAndRolesTest extends TestCase
 
     public function test_guests_are_redirected_to_login(): void
     {
+        User::factory()->owner()->create();
+
         $this->get('/')->assertRedirect('/login');
         $this->get('/login')->assertOk()->assertSee('Log in');
     }
@@ -27,6 +30,45 @@ class AuthAndRolesTest extends TestCase
         $this->assertGuest();
     }
 
+    public function test_login_page_remembers_the_last_email_and_can_show_the_password(): void
+    {
+        User::factory()->owner()->create(['email' => 'boss@shop.test']);
+
+        $this->get('/login')->assertDontSee('Welcome back')->assertSee('Show password');
+
+        $this->post('/login', ['email' => 'boss@shop.test', 'password' => 'password'])
+            ->assertCookie('last_email', 'boss@shop.test');
+        $this->post('/logout');
+
+        $this->withCookie('last_email', 'boss@shop.test')->get('/login')
+            ->assertSee('Welcome back')
+            ->assertSee('value="boss@shop.test"', false);
+    }
+
+    public function test_seller_starts_on_the_till_panel_with_few_options(): void
+    {
+        $seller = User::factory()->seller()->create(['email' => 'till@shop.test']);
+
+        $this->post('/login', ['email' => 'till@shop.test', 'password' => 'password'])->assertRedirect('/');
+
+        // Home is a launcher of big cards.
+        $this->actingAs($seller)->get('/')->assertOk()
+            ->assertSee('home-card', false)
+            ->assertSee(route('sales.create'), false)
+            ->assertDontSee(route('stock.create'), false)
+            ->assertSee(route('credit.index'), false)
+            ->assertDontSee(__('Profit today'));
+
+        $this->actingAs($seller)->get('/sales/new')->assertOk()
+            ->assertSee('panel-tab', false)
+            ->assertSee(route('credit.index'), false)
+            ->assertDontSee('nav-link', false)
+            ->assertDontSee(route('expenses.index'), false);
+
+        $owner = User::factory()->owner()->create();
+        $this->actingAs($owner)->get('/sales/new')->assertOk()->assertSee('nav-link', false)->assertDontSee('panel-tab', false);
+    }
+
     public function test_inactive_user_cannot_log_in(): void
     {
         User::factory()->create(['email' => 'off@shop.test', 'is_active' => false]);
@@ -39,11 +81,15 @@ class AuthAndRolesTest extends TestCase
     {
         $seller = User::factory()->seller()->create();
 
-        foreach (['/reports', '/expenses', '/users', '/settings', '/tags', '/products/create'] as $url) {
+        foreach (['/reports', '/expenses', '/users', '/settings', '/tags', '/products/create', '/stock', '/stock/add'] as $url) {
             $this->actingAs($seller)->get($url)->assertForbidden();
         }
 
-        foreach (['/', '/products', '/sales/new', '/stock/add', '/credit', '/customers', '/alerts'] as $url) {
+        $product = Product::factory()->create(['quantity' => 5]);
+        $this->actingAs($seller)->post('/stock', ['items' => [['product_id' => $product->id, 'quantity' => 10]]])->assertForbidden();
+        $this->assertEquals(5, (float) $product->fresh()->quantity);
+
+        foreach (['/', '/products', '/sales/new', '/credit', '/customers', '/alerts'] as $url) {
             $this->actingAs($seller)->get($url)->assertOk();
         }
     }
@@ -71,5 +117,17 @@ class AuthAndRolesTest extends TestCase
             'name' => $owner->name, 'email' => $owner->email, 'role' => 'seller', 'locale' => 'en', 'is_active' => 1,
         ])->assertSessionHasErrors('role');
         $this->assertTrue($owner->fresh()->isOwner());
+    }
+
+    public function test_app_version_and_creator_are_shown_on_login_and_for_both_roles(): void
+    {
+        config(['app.version' => '9.8.7']);
+
+        $owner = User::factory()->owner()->create();
+        $seller = User::factory()->seller()->create();
+
+        $this->get('/login')->assertSee('v9.8.7')->assertSee('Mndima Technologies');
+        $this->actingAs($owner)->get('/')->assertSee('v9.8.7')->assertSee('Developed by');
+        $this->actingAs($seller)->get('/')->assertSee('v9.8.7')->assertSee('Mndima Technologies');
     }
 }

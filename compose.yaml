@@ -1,0 +1,25 @@
+services:
+  app:
+    build: .
+    image: shopapp:latest
+    container_name: shopapp
+    restart: unless-stopped
+    ports:
+      - "${APP_PORT:-8080}:80"
+    environment:
+      APP_NAME: "${APP_NAME:-ShopApp}"
+      APP_URL: "${APP_URL:-http://localhost:8080}"
+      # Leave empty to auto-generate one (stored in the data volume).
+      APP_KEY: "${APP_KEY:-}"
+      APP_LOCALE: "${APP_LOCALE:-en}"
+    volumes:
+      - shopapp-data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-fs", "-o", "/dev/null", "http://localhost/login"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+
+volumes:
+  shopapp-data:
