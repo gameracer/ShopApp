@@ -30,6 +30,21 @@ class AuthAndRolesTest extends TestCase
         $this->assertGuest();
     }
 
+    public function test_login_page_remembers_the_last_email_and_can_show_the_password(): void
+    {
+        User::factory()->owner()->create(['email' => 'boss@shop.test']);
+
+        $this->get('/login')->assertDontSee('Welcome back')->assertSee('Show password');
+
+        $this->post('/login', ['email' => 'boss@shop.test', 'password' => 'password'])
+            ->assertCookie('last_email', 'boss@shop.test');
+        $this->post('/logout');
+
+        $this->withCookie('last_email', 'boss@shop.test')->get('/login')
+            ->assertSee('Welcome back')
+            ->assertSee('value="boss@shop.test"', false);
+    }
+
     public function test_seller_starts_on_the_till_panel_with_few_options(): void
     {
         $seller = User::factory()->seller()->create(['email' => 'till@shop.test']);

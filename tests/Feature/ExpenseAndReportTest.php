@@ -74,6 +74,55 @@ class ExpenseAndReportTest extends TestCase
         Carbon::setTestNow();
     }
 
+    public function test_report_downloads_as_excel_with_a_sheet_per_table(): void
+    {
+        Carbon::setTestNow('2026-11-10 12:00:00');
+
+        $owner = User::factory()->owner()->create(['name' => 'Asha']);
+        $product = Product::factory()->create(['name' => 'Soda', 'quantity' => 100, 'buying_price' => 600, 'selling_price' => 1000]);
+        app(SaleService::class)->create($owner, [['product_id' => $product->id, 'quantity' => 5]], 'cash', 0);
+        Expense::factory()->create(['amount' => 1000, 'expense_date' => '2026-11-01', 'category' => 'electricity', 'description' => 'Luku']);
+
+        $response = $this->actingAs($owner)->get('/reports/export?format=xlsx&period=monthly&date=2026-11')->assertOk()
+            ->assertHeader('content-disposition', 'attachment; filename=report-monthly-2026-11.xlsx');
+
+        $sheets = [];
+        $reader = new \OpenSpout\Reader\XLSX\Reader;
+        $reader->open($response->getFile()->getPathname());
+        foreach ($reader->getSheetIterator() as $sheet) {
+            foreach ($sheet->getRowIterator() as $row) {
+                $sheets[$sheet->getName()][] = $row->toArray();
+            }
+        }
+        $reader->close();
+
+        $this->assertSame(['Summary', 'Day by day', 'Sales', 'Top products', 'Expenses'], array_keys($sheets));
+
+        $summary = collect($sheets['Summary'])->filter(fn ($r) => count($r) >= 2)->mapWithKeys(fn ($r) => [$r[0] => $r[1]]);
+        $this->assertEquals(5000, $summary['Revenue']);
+        $this->assertEquals(1000, $summary['Net profit']);
+        $this->assertEquals(1, $summary['Sales']);
+
+        $this->assertSame('Soda', $sheets['Top products'][1][1]);
+        $this->assertSame('Asha', $sheets['Sales'][1][2]);
+        $this->assertEquals(2000, $sheets['Sales'][1][9], 'profit of the sale');
+        $this->assertSame(['Total', 1000], [end($sheets['Expenses'])[0], (int) end($sheets['Expenses'])[3]]);
+        $this->assertCount(12, $sheets['Day by day'], 'header, 1..10 Nov, total');
+
+        // Filtered by seller: expenses are not part of the report, so there is no Expenses sheet.
+        $response = $this->actingAs($owner)->get("/reports/export?format=xlsx&period=monthly&date=2026-11&seller={$owner->id}")->assertOk();
+        $reader = new \OpenSpout\Reader\XLSX\Reader;
+        $reader->open($response->getFile()->getPathname());
+        $names = [];
+        foreach ($reader->getSheetIterator() as $sheet) {
+            $names[] = $sheet->getName();
+        }
+        $reader->close();
+        $this->assertNotContains('Expenses', $names);
+
+        Carbon::setTestNow();
+    }
+
     public function test_owner_dashboard_charts_daily_monthly_and_yearly_sales(): void
     {
         $owner = User::factory()->owner()->create();

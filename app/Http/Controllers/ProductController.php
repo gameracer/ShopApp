@@ -6,6 +6,7 @@ use App\Models\Product;
 use App\Models\Tag;
 use Closure;
 use Illuminate\Http\Request;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 
@@ -147,8 +148,14 @@ class ProductController extends Controller
 
     public function update(Request $request, Product $product)
     {
-        $product->update($this->validated($request, $product));
-        $product->tags()->sync($this->tagIds($request));
+        $data = $this->validated($request, $product);
+
+        DB::transaction(function () use ($data, $request, $product) {
+            // A quantity typed here is a stock correction, so it is recorded like one.
+            $product->fill(Arr::except($data, 'quantity'))->save();
+            $product->adjustStock((float) $data['quantity'], $request->user(), __('Changed on the product form'));
+            $product->tags()->sync($this->tagIds($request));
+        });
 
         return redirect()->route('products.show', $product)->with('success', __('Product saved.'));
     }

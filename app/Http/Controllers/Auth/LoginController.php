@@ -9,13 +9,18 @@ use Illuminate\Validation\ValidationException;
 
 class LoginController extends Controller
 {
-    public function show()
+    private const LAST_EMAIL_COOKIE = 'last_email';
+
+    public function show(Request $request)
     {
         if (SetupController::needed()) {
             return redirect()->route('setup');
         }
 
-        return view('auth.login');
+        // The last email that logged in on this computer, so returning users only type their password.
+        $lastEmail = $request->cookie(self::LAST_EMAIL_COOKIE);
+
+        return view('auth.login', ['lastEmail' => is_string($lastEmail) ? $lastEmail : null]);
     }
 
     public function login(Request $request)
@@ -32,7 +37,8 @@ class LoginController extends Controller
         $request->session()->regenerate();
         $request->session()->put('locale', $request->user()->locale);
 
-        return redirect()->intended(route('dashboard'));
+        return redirect()->intended(route('dashboard'))
+            ->withCookie(cookie()->forever(self::LAST_EMAIL_COOKIE, $request->user()->email));
     }
 
     public function logout(Request $request)

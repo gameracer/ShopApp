@@ -9,6 +9,7 @@ use App\Models\SaleItem;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonPeriod;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
@@ -36,15 +37,33 @@ class ReportService
         };
     }
 
+    /**
+     * The sales a report covers.
+     */
+    public function salesQuery(CarbonImmutable $start, CarbonImmutable $end, ?int $sellerId = null): Builder
+    {
+        return Sale::query()
+            ->whereBetween('sold_at', [$start, $end])
+            ->when($sellerId, fn ($q) => $q->where('user_id', $sellerId));
+    }
+
+    /**
+     * The expenses a report covers. Expenses belong to the shop, not to a seller,
+     * so a report filtered by seller has none.
+     */
+    public function expensesQuery(CarbonImmutable $start, CarbonImmutable $end, ?int $sellerId = null): Builder
+    {
+        return Expense::query()
+            ->whereBetween('expense_date', [$start->startOfDay(), $end->endOfDay()])
+            ->when($sellerId, fn ($q) => $q->whereRaw('1 = 0'));
+    }
+
     public function build(string $period, CarbonImmutable $start, CarbonImmutable $end, ?int $sellerId = null): array
     {
-        $sales = Sale::query()
-            ->whereBetween('sold_at', [$start, $end])
-            ->when($sellerId, fn ($q) => $q->where('user_id', $sellerId))
+        $sales = $this->salesQuery($start, $end, $sellerId)
             ->get(['id', 'user_id', 'total', 'cost_total', 'amount_paid', 'payment_method', 'sold_at']);
 
-        $expenses = $sellerId ? collect() : Expense::query()
-            ->whereBetween('expense_date', [$start->startOfDay(), $end->endOfDay()])
+        $expenses = $sellerId ? collect() : $this->expensesQuery($start, $end)
             ->get(['category', 'amount', 'expense_date']);
 
         $payments = Payment::query()

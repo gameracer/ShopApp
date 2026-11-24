@@ -7,20 +7,25 @@ use App\Models\StockEntry;
 use App\Models\Tag;
 use App\Models\User;
 use DateTimeImmutable;
+use DateTimeInterface;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
+use OpenSpout\Reader\XLSX\Options as XlsxReaderOptions;
+use OpenSpout\Reader\XLSX\Reader as XlsxReader;
 use RuntimeException;
 
 /**
- * Imports products from a CSV file.
+ * Imports products from a CSV or Excel (.xlsx) file, the same layout as the product export.
  *
- * Product names must be unique (case-insensitive, ignoring extra spaces):
- * rows whose name already exists in the shop, or appears earlier in the
- * same file, are skipped and reported back instead of being imported.
+ * Product names must be unique (case-insensitive, ignoring extra spaces). A row whose
+ * name is new creates a product. A row whose name already exists in the shop receives
+ * the stock in its "add_stock" column (like Add stock) and is otherwise left unchanged.
+ * New names repeated in the file, and shop products listed twice with stock to add,
+ * are skipped and reported back.
  */
 class ProductImporter
 {
-    /** Largest CSV accepted, in kilobytes (15 MB): the app runs on capable desktops. */
+    /** Largest file accepted, in kilobytes (15 MB): the app runs on capable desktops. */
     public const MAX_FILE_KB = 15 * 1024;
 
     /** A full 15 MB file of typical rows is ~115k lines (about 30 s to import); short rows are capped here. */
@@ -32,10 +37,10 @@ class ProductImporter
     /** Products saved per multi-row insert (11 columns each, well under SQLite's bound-parameter limit). */
     private const BATCH_SIZE = 250;
 
-    /** Columns of the downloadable template, in order. */
+    /** Columns of the downloadable template and of the product export, in order. */
     public const COLUMNS = [
         'name', 'sku', 'unit', 'buying_price', 'selling_price',
-        'quantity', 'reorder_level', 'expiry_date', 'tags', 'description',
+        'quantity', 'add_stock', 'reorder_level', 'expiry_date', 'tags', 'description',
     ];
 
     /** Alternative header spellings mapped to the column they mean. */
@@ -54,6 +59,9 @@ class ProductImporter
         'qty' => 'quantity',
         'stock' => 'quantity',
         'quantity_in_stock' => 'quantity',
+        'received' => 'add_stock',
+        'new_stock' => 'add_stock',
+        'stock_in' => 'add_stock',
         'reorder' => 'reorder_level',
         'expiry' => 'expiry_date',
         'expires' => 'expiry_date',
@@ -63,11 +71,12 @@ class ProductImporter
     private const DATE_FORMATS = ['Y-m-d', 'd/m/Y', 'd-m-Y', 'd.m.Y'];
 
     /**
-     * @return array{imported: int, skipped: list<array{row: int, name: string, reason: string}>, skipped_total: int}
+     * @param  bool  $excel  true for an .xlsx workbook (its first sheet is read), false for CSV
+     * @return array{imported: int, stocked: int, unchanged: int, skipped: list<array{row: int, name: string, reason: string}>, skipped_total: int}
      *
      * @throws RuntimeException when the file cannot be read, has no name column or has too many rows
      */
-    public function import(string $path, User $user): array
+    public function import(string $path, User $user, bool $excel = false): array
     {
         // Large files take a while on a single-threaded local server: never let
         // PHP's limits stop the import halfway (the transaction would roll back anyway).
@@ -76,28 +85,57 @@ class ProductImporter
 
         // Quick read-only pass first: a missing header or too many rows fails
         // in a second or two, before anything is written.
-        foreach ($this->readCsv($path) as $_) {
+        foreach ($this->readRows($path, $excel) as $_) {
             // just counting
         }
 
-        $existingNames = Product::pluck('name')->mapWithKeys(fn ($n) => [Product::normalizeName($n) => true])->all();
+        // Shop products by normalized name => id; products created by this import map to true.
+        $existingNames = Product::pluck('id', 'name')->mapWithKeys(fn ($id, $n) => [Product::normalizeName($n) => $id])->all();
         $existingSkus = Product::whereNotNull('sku')->pluck('sku')->mapWithKeys(fn ($s) => [mb_strtolower($s) => true])->all();
         $tagIds = [];
 
         $imported = 0;
+        $stocked = [];
+        $unchanged = 0;
         $skipped = [];
         $skippedTotal = 0;
 
         // Rows are streamed and saved in small batches, so memory stays flat whatever
         // the file size; one transaction keeps the import all-or-nothing.
-        DB::transaction(function () use ($path, $user, &$existingNames, &$existingSkus, &$tagIds, &$imported, &$skipped, &$skippedTotal) {
+        DB::transaction(function () use ($path, $excel, $user, &$existingNames, &$existingSkus, &$tagIds, &$imported, &$stocked, &$unchanged, &$skipped, &$skippedTotal) {
             $batch = [];
 
-            foreach ($this->readCsv($path) as $line => $row) {
+            foreach ($this->readRows($path, $excel) as $line => $row) {
                 [$data, $error] = $this->validateRow($row);
 
                 $key = $data ? Product::normalizeName($data['name']) : null;
                 $skuKey = $data && $data['sku'] !== null ? mb_strtolower($data['sku']) : null;
+                $productId = is_int($existingNames[$key] ?? null) ? $existingNames[$key] : null;
+
+                // A product already in the shop: only its new stock is taken from the row.
+                if ($error === null && $productId !== null) {
+                    if ((float) ($data['add_stock'] ?? 0) <= 0) {
+                        $unchanged++;
+
+                        continue;
+                    }
+
+                    if (isset($stocked[$productId])) {
+                        $error = __('This product is listed more than once with stock to add.');
+                    } else {
+                        Product::lockForUpdate()->findOrFail($productId)->receiveStock(
+                            (float) $data['add_stock'],
+                            (float) $data['buying_price'],
+                            (float) $data['selling_price'],
+                            $data['expiry_date'],
+                            $user,
+                            note: __('Stock import'),
+                        );
+                        $stocked[$productId] = true;
+
+                        continue;
+                    }
+                }
 
                 $error ??= match (true) {
                     isset($existingNames[$key]) => __('A product with this name already exists.'),
@@ -119,6 +157,10 @@ class ProductImporter
                     $existingSkus[$skuKey] = true;
                 }
 
+                // For a new product, stock to add is simply more opening stock.
+                $data['quantity'] = round((float) $data['quantity'] + (float) ($data['add_stock'] ?? 0), 2);
+                unset($data['add_stock']);
+
                 $batch[] = $data;
                 if (count($batch) >= self::BATCH_SIZE) {
                     $imported += $this->insertBatch($batch, $user, $tagIds);
@@ -129,7 +171,13 @@ class ProductImporter
             $imported += $this->insertBatch($batch, $user, $tagIds);
         });
 
-        return ['imported' => $imported, 'skipped' => $skipped, 'skipped_total' => $skippedTotal];
+        return [
+            'imported' => $imported,
+            'stocked' => count($stocked),
+            'unchanged' => $unchanged,
+            'skipped' => $skipped,
+            'skipped_total' => $skippedTotal,
+        ];
     }
 
     /**
@@ -233,11 +281,53 @@ class ProductImporter
     }
 
     /**
-     * Stream the CSV as rows keyed by column name, indexed by their line number.
+     * Stream the file as rows keyed by column name, indexed by their line number.
      *
      * @return \Generator<int, array<string, string>>
      */
-    private function readCsv(string $path): \Generator
+    private function readRows(string $path, bool $excel): \Generator
+    {
+        $headers = null;
+        $count = 0;
+
+        foreach ($excel ? $this->xlsxCells($path) : $this->csvCells($path) as $line => $cells) {
+            if ($headers === null) {
+                $headers = array_map(fn ($h) => $this->columnFor($h), $cells);
+                if (! in_array('name', $headers, true)) {
+                    throw new RuntimeException(__('The file must have a header row with a "name" column. Download the template to see the expected columns.'));
+                }
+
+                continue;
+            }
+
+            if (implode('', array_map('trim', $cells)) === '') {
+                continue; // blank line
+            }
+
+            if (++$count > self::MAX_ROWS) {
+                throw new RuntimeException(__('The file has too many rows. Import at most :max products at a time.', ['max' => number_format(self::MAX_ROWS)]));
+            }
+
+            $row = [];
+            foreach ($headers as $i => $column) {
+                if ($column !== null && ! isset($row[$column])) {
+                    $row[$column] = trim($cells[$i] ?? '');
+                }
+            }
+            yield $line => $row;
+        }
+
+        if ($headers === null) {
+            throw new RuntimeException(__('The file is empty.'));
+        }
+    }
+
+    /**
+     * The CSV's lines as lists of UTF-8 strings, the header line first.
+     *
+     * @return \Generator<int, list<string>>
+     */
+    private function csvCells(string $path): \Generator
     {
         $handle = @fopen($path, 'r');
         if ($handle === false) {
@@ -247,7 +337,7 @@ class ProductImporter
         try {
             $first = fgets($handle);
             if ($first === false) {
-                throw new RuntimeException(__('The file is empty.'));
+                return;
             }
 
             // Strip a UTF-8 BOM (added by Excel) and detect the delimiter;
@@ -255,35 +345,58 @@ class ProductImporter
             $first = preg_replace('/^\xEF\xBB\xBF/', '', $first);
             $delimiter = $this->detectDelimiter($first);
 
-            $headers = array_map(fn ($h) => $this->columnFor((string) $h), str_getcsv($first, $delimiter, '"', ''));
-            if (! in_array('name', $headers, true)) {
-                throw new RuntimeException(__('The file must have a header row with a "name" column. Download the template to see the expected columns.'));
-            }
+            $toStrings = fn (array $cells) => array_map(fn ($c) => $this->toUtf8((string) $c), $cells);
 
-            $count = 0;
+            yield 1 => $toStrings(str_getcsv($first, $delimiter, '"', ''));
+
             $line = 1;
             while (($cells = fgetcsv($handle, null, $delimiter, '"', '')) !== false) {
-                $line++;
-
-                if ($cells === [null] || implode('', array_map('trim', array_map('strval', $cells))) === '') {
-                    continue; // blank line
-                }
-
-                if (++$count > self::MAX_ROWS) {
-                    throw new RuntimeException(__('The file has too many rows. Import at most :max products at a time.', ['max' => number_format(self::MAX_ROWS)]));
-                }
-
-                $row = [];
-                foreach ($headers as $i => $column) {
-                    if ($column !== null && ! isset($row[$column])) {
-                        $row[$column] = $this->toUtf8(trim((string) ($cells[$i] ?? '')));
-                    }
-                }
-                yield $line => $row;
+                yield ++$line => $toStrings($cells);
             }
         } finally {
             fclose($handle);
         }
+    }
+
+    /**
+     * The first sheet's rows as lists of strings, the header row first.
+     *
+     * @return \Generator<int, list<string>>
+     */
+    private function xlsxCells(string $path): \Generator
+    {
+        $reader = new XlsxReader(new XlsxReaderOptions(SHOULD_PRESERVE_EMPTY_ROWS: true));
+
+        try {
+            $reader->open($path);
+        } catch (\Throwable) {
+            throw new RuntimeException(__('The file could not be read.'));
+        }
+
+        try {
+            foreach ($reader->getSheetIterator() as $sheet) {
+                $line = 0;
+                foreach ($sheet->getRowIterator() as $row) {
+                    yield ++$line => array_map(fn ($value) => $this->cellToString($value), $row->toArray());
+                }
+
+                break; // only the first sheet
+            }
+        } finally {
+            $reader->close();
+        }
+    }
+
+    /** An Excel cell value as the text a CSV would hold for it. */
+    private function cellToString(mixed $value): string
+    {
+        return match (true) {
+            $value instanceof DateTimeInterface => $value->format('Y-m-d'),
+            is_bool($value) => $value ? '1' : '0',
+            is_array($value) => implode('', array_map(fn ($run) => $run->text ?? '', $value)), // rich text
+            is_scalar($value) => (string) $value,
+            default => '',
+        };
     }
 
     /**
@@ -300,6 +413,7 @@ class ProductImporter
             'buying_price' => $number($row['buying_price'] ?? null),
             'selling_price' => $number($row['selling_price'] ?? null),
             'quantity' => $number($row['quantity'] ?? null) ?? 0,
+            'add_stock' => $number($row['add_stock'] ?? null),
             'reorder_level' => $number($row['reorder_level'] ?? null) ?? 0,
             'description' => ($row['description'] ?? '') === '' ? null : $row['description'],
         ];
@@ -317,6 +431,7 @@ class ProductImporter
                 'buying_price' => ['required', 'numeric', 'min:0'],
                 'selling_price' => ['required', 'numeric', 'min:0'],
                 'quantity' => ['required', 'numeric', 'min:0'],
+                'add_stock' => ['nullable', 'numeric', 'min:0'],
                 'reorder_level' => ['required', 'numeric', 'min:0'],
                 'description' => ['nullable', 'string', 'max:2000'],
             ], [], [
@@ -326,6 +441,7 @@ class ProductImporter
                 'buying_price' => __('Buying price'),
                 'selling_price' => __('Selling price'),
                 'quantity' => __('Quantity'),
+                'add_stock' => __('Stock to add'),
                 'reorder_level' => __('Reorder level'),
                 'description' => __('Description'),
             ]);
@@ -367,6 +483,11 @@ class ProductImporter
             if ($value === null || ! is_numeric($value) || $value < 0) {
                 return false;
             }
+        }
+
+        $addStock = $input['add_stock'];
+        if ($addStock !== null && (! is_numeric($addStock) || $addStock < 0)) {
+            return false;
         }
 
         return $input['name'] !== '' && mb_strlen($input['name']) <= 255

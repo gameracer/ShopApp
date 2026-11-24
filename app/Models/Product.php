@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
 class Product extends Model
@@ -43,6 +44,66 @@ class Product extends Model
     public function stockEntries(): HasMany
     {
         return $this->hasMany(StockEntry::class);
+    }
+
+    /**
+     * Receive goods: record the delivery in the stock history and add it to the stock.
+     * The delivery's prices become the product's prices.
+     */
+    public function receiveStock(float $quantity, float $buyingPrice, float $sellingPrice, ?string $expiryDate, ?User $user, ?string $supplier = null, ?string $note = null): void
+    {
+        $this->stockEntries()->create([
+            'user_id' => $user?->id,
+            'quantity' => $quantity,
+            'buying_price' => $buyingPrice,
+            'selling_price' => $sellingPrice,
+            'expiry_date' => $expiryDate,
+            'supplier' => $supplier,
+            'note' => $note,
+        ]);
+
+        // Keep the earliest expiry while older stock is still on the shelf,
+        // so near-expiry alerts are not hidden by a fresher batch.
+        if (! empty($expiryDate)) {
+            $newExpiry = Carbon::parse($expiryDate);
+            $hasOldStock = (float) $this->quantity > 0 && $this->expiry_date !== null;
+            $this->expiry_date = $hasOldStock && $this->expiry_date->lt($newExpiry)
+                ? $this->expiry_date
+                : $newExpiry;
+        }
+
+        $this->quantity = round((float) $this->quantity + $quantity, 2);
+        $this->buying_price = $buyingPrice;
+        $this->selling_price = $sellingPrice;
+        $this->save();
+    }
+
+    /**
+     * Set the stock to a counted quantity and record the difference in the stock
+     * history, so hand corrections are never silent.
+     * Returns false when the quantity did not change.
+     */
+    public function adjustStock(float $quantity, ?User $user, string $note): bool
+    {
+        $quantity = round($quantity, 2);
+        $difference = round($quantity - (float) $this->quantity, 2);
+
+        if ($difference == 0) {
+            return false;
+        }
+
+        $this->stockEntries()->create([
+            'user_id' => $user?->id,
+            'quantity' => $difference,
+            'buying_price' => $this->buying_price,
+            'selling_price' => $this->selling_price,
+            'note' => $note,
+        ]);
+
+        $this->quantity = $quantity;
+        $this->save();
+
+        return true;
     }
 
     /**

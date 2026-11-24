@@ -52,6 +52,7 @@ Route::middleware('auth')->group(function () {
         Route::get('/products/import', [ProductImportController::class, 'create'])->name('products.import');
         Route::post('/products/import', [ProductImportController::class, 'store'])->name('products.import.store')->middleware('throttle:10,1');
         Route::get('/products/import/template', [ProductImportController::class, 'template'])->name('products.import.template');
+        Route::get('/products/export', [ProductImportController::class, 'export'])->name('products.export');
     });
     Route::resource('products', ProductController::class)->except(['index', 'show'])->middleware('role:owner');
     Route::resource('products', ProductController::class)->only(['index', 'show']);
@@ -61,6 +62,8 @@ Route::middleware('auth')->group(function () {
         Route::get('/stock', [StockController::class, 'index'])->name('stock.index');
         Route::get('/stock/add', [StockController::class, 'create'])->name('stock.create');
         Route::post('/stock', [StockController::class, 'store'])->name('stock.store');
+        Route::get('/products/{product}/adjust', [StockController::class, 'adjust'])->name('stock.adjust');
+        Route::post('/products/{product}/adjust', [StockController::class, 'storeAdjustment'])->name('stock.adjust.store');
     });
 
     // Sales / point of sale

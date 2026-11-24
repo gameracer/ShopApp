@@ -46,7 +46,7 @@ class ProductImportTest extends TestCase
 
         $this->actingAs($owner)->post('/products/import', ['file' => $this->csv(
             "name,buying_price,selling_price\n".
-            "  coca   COLA ,500,700\n".   // same as existing product
+            "  coca   COLA ,500,700\n".   // same as existing product, nothing to add: left unchanged
             "Fanta,500,700\n".
             "FANTA,500,700\n".            // repeats a row above
             ",500,700\n".                 // missing name
@@ -55,7 +55,8 @@ class ProductImportTest extends TestCase
 
         $result = session('import_result');
         $this->assertSame(1, $result['imported']);
-        $this->assertSame([2, 4, 5, 6], array_column($result['skipped'], 'row'));
+        $this->assertSame(1, $result['unchanged']);
+        $this->assertSame([4, 5, 6], array_column($result['skipped'], 'row'));
         $this->assertSame(1, Product::where('name', 'like', 'coca%')->count());
         $this->assertSame(['Coca Cola', 'Fanta'], Product::orderBy('name')->pluck('name')->all());
     }
@@ -163,6 +164,109 @@ class ProductImportTest extends TestCase
         $this->actingAs($owner)->get('/products/import')->assertOk()->assertSee('Download template');
         $response = $this->actingAs($owner)->get('/products/import/template')->assertOk();
         $this->assertStringStartsWith('name,sku,unit,buying_price', $response->streamedContent());
+    }
+
+    public function test_add_stock_column_restocks_existing_products_and_creates_new_ones(): void
+    {
+        $owner = User::factory()->owner()->create();
+        $soda = Product::factory()->create(['name' => 'Soda 500ml', 'quantity' => 12, 'buying_price' => 800, 'selling_price' => 1000, 'expiry_date' => null]);
+        $rice = Product::factory()->create(['name' => 'Rice 1kg', 'quantity' => 30, 'buying_price' => 2500, 'selling_price' => 3000]);
+
+        $this->actingAs($owner)->post('/products/import', ['file' => $this->csv(
+            "name,buying_price,selling_price,quantity,add_stock,expiry_date\n".
+            "soda 500ML,850,1100,12,24,2027-03-01\n". // restocked with new prices
+            "Rice 1kg,2500,3000,30,,\n".              // nothing arrived
+            "Soda 500ml,850,1100,12,5,\n".            // listed twice with stock to add
+            "Sugar 1kg,2000,2400,0,10,\n"             // new product: add_stock is opening stock
+        )])->assertSessionHasNoErrors()->assertSessionHas('success');
+
+        $result = session('import_result');
+        $this->assertSame(1, $result['imported']);
+        $this->assertSame(1, $result['stocked']);
+        $this->assertSame(1, $result['unchanged']);
+        $this->assertSame([4], array_column($result['skipped'], 'row'));
+
+        $soda->refresh();
+        $this->assertEquals(36, $soda->quantity);
+        $this->assertEquals(850, $soda->buying_price);
+        $this->assertEquals(1100, $soda->selling_price);
+        $this->assertSame('2027-03-01', $soda->expiry_date->toDateString());
+        $this->assertDatabaseHas('stock_entries', ['product_id' => $soda->id, 'quantity' => 24, 'note' => 'Stock import', 'user_id' => $owner->id]);
+
+        $this->assertEquals(30, $rice->refresh()->quantity);
+        $this->assertDatabaseMissing('stock_entries', ['product_id' => $rice->id]);
+
+        $this->assertDatabaseHas('products', ['name' => 'Sugar 1kg', 'quantity' => 10]);
+    }
+
+    public function test_export_downloads_all_products_as_csv_in_the_import_layout(): void
+    {
+        $owner = User::factory()->owner()->create();
+        $soda = Product::factory()->create(['name' => 'Soda 500ml', 'sku' => '0061234', 'unit' => 'bottle', 'quantity' => 12.5, 'buying_price' => 800, 'selling_price' => 1000, 'reorder_level' => 6, 'expiry_date' => '2027-01-31', 'description' => null]);
+        $soda->tags()->attach(\App\Models\Tag::factory()->create(['name' => 'drinks']));
+
+        $csv = $this->actingAs($owner)->get('/products/export?format=csv')->assertOk()->streamedContent();
+
+        $this->assertSame(
+            "\xEF\xBB\xBFname,sku,unit,buying_price,selling_price,quantity,add_stock,reorder_level,expiry_date,tags,description\n".
+            "\"Soda 500ml\",0061234,bottle,800,1000,12.5,,6,2027-01-31,drinks,\n",
+            $csv
+        );
+    }
+
+    public function test_exported_excel_file_can_be_filled_in_and_imported_back(): void
+    {
+        $owner = User::factory()->owner()->create();
+        $milk = Product::factory()->create(['name' => 'Fresh Milk', 'sku' => '0061234', 'quantity' => 4, 'buying_price' => 1200, 'selling_price' => 1500]);
+        Product::factory()->create(['name' => 'Bread', 'quantity' => 10]);
+
+        $response = $this->actingAs($owner)->get('/products/export?format=xlsx')->assertOk();
+        $exported = $response->getFile()->getPathname();
+
+        // The owner opens the workbook, fills in add_stock for milk and saves it.
+        $reader = new \OpenSpout\Reader\XLSX\Reader;
+        $reader->open($exported);
+        $rows = [];
+        foreach ($reader->getSheetIterator()->current()->getRowIterator() as $row) {
+            $rows[] = $row->toArray();
+        }
+        $reader->close();
+
+        $this->assertSame(\App\Support\ProductImporter::COLUMNS, $rows[0]);
+        $this->assertSame(['Bread', 'Fresh Milk'], [$rows[1][0], $rows[2][0]]);
+        $this->assertSame('0061234', $rows[2][1], 'barcodes are kept as text');
+
+        $rows[2][6] = 20;
+        $edited = tempnam(sys_get_temp_dir(), 'xlsx');
+        $writer = new \OpenSpout\Writer\XLSX\Writer;
+        $writer->openToFile($edited);
+        foreach ($rows as $row) {
+            $writer->addRow(\OpenSpout\Common\Entity\Row::fromValues($row));
+        }
+        $writer->close();
+
+        $file = new UploadedFile($edited, 'products.xlsx', null, null, true);
+        $this->actingAs($owner)->post('/products/import', ['file' => $file])->assertSessionHasNoErrors();
+
+        $this->assertSame(1, session('import_result.stocked'));
+        $this->assertSame(1, session('import_result.unchanged'));
+        $this->assertEquals(24, $milk->refresh()->quantity);
+    }
+
+    public function test_other_file_types_are_rejected(): void
+    {
+        $owner = User::factory()->owner()->create();
+
+        $this->actingAs($owner)->from('/products/import')
+            ->post('/products/import', ['file' => UploadedFile::fake()->createWithContent('products.pdf', 'x')])
+            ->assertSessionHasErrors('file');
+    }
+
+    public function test_sellers_cannot_export(): void
+    {
+        $seller = User::factory()->seller()->create();
+
+        $this->actingAs($seller)->get('/products/export?format=csv')->assertForbidden();
     }
 
     public function test_product_form_rejects_duplicate_name_case_insensitively(): void

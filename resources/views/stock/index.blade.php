@@ -21,7 +21,7 @@
             <tr>
                 <td class="whitespace-nowrap">{{ $entry->created_at->format('d/m/Y H:i') }}</td>
                 <td>@if ($entry->product)<a href="{{ route('products.show', $entry->product) }}" class="hover:underline">{{ $entry->product->name }}</a>@endif</td>
-                <td class="text-right font-medium text-emerald-700">+{{ qty($entry->quantity) }} {{ $entry->product?->unit }}</td>
+                <td class="text-right"><x-stock-change :quantity="$entry->quantity" :unit="$entry->product?->unit" /></td>
                 <td class="text-right">{{ money($entry->buying_price, false) }}</td>
                 <td class="text-right">{{ money($entry->buying_price * $entry->quantity, false) }}</td>
                 <td>{{ $entry->expiry_date?->format('d/m/Y') ?? '—' }}</td>

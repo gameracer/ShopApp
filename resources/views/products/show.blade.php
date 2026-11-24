@@ -7,6 +7,7 @@
     <x-slot:actions>
         @if ($isOwner)
             <a href="{{ route('stock.create', ['product' => $product->id]) }}" class="btn-primary"><x-icon name="truck" class="h-4 w-4" /> {{ __('Add stock') }}</a>
+            <a href="{{ route('stock.adjust', $product) }}" class="btn-secondary">{{ __('Adjust stock') }}</a>
             <a href="{{ route('products.edit', $product) }}" class="btn-secondary">{{ __('Edit') }}</a>
         @endif
     </x-slot:actions>
@@ -43,7 +44,7 @@
                 @forelse ($product->stockEntries as $entry)
                     <tr>
                         <td>{{ $entry->created_at->format('d/m/Y H:i') }}</td>
-                        <td class="text-right font-medium text-emerald-700">+{{ qty($entry->quantity) }}</td>
+                        <td class="text-right"><x-stock-change :quantity="$entry->quantity" /></td>
                         @if ($isOwner)<td class="text-right">{{ money($entry->buying_price, false) }}</td>@endif
                         <td>{{ $entry->expiry_date?->format('d/m/Y') ?? '—' }}</td>
                         <td>{{ $entry->supplier ?? $entry->note ?? '—' }}</td>
